@@ -1,0 +1,42 @@
+# Local secrets for `wrangler pages dev` (Cloudflare Pages Functions).
+# Copy to `.dev.vars` and fill in real values - never commit `.dev.vars`.
+#
+# In production these are set as encrypted environment variables in the
+# Cloudflare Pages dashboard (Settings > Environment variables), NOT in the
+# Vite `.env` file - functions/ code reads them via `process.env`, and none
+# of these names carry the `VITE_` prefix so Vite can never inline them into
+# the client bundle.
+
+# Firebase Admin SDK (service account) - used to verify ID tokens and read/write Firestore
+# VITE_FIREBASE_PROJECT_ID is shared with the Vite client build (see .env.example)
+VITE_FIREBASE_PROJECT_ID=your-project-id
+FIREBASE_CLIENT_EMAIL=your-service-account@your-project.iam.gserviceaccount.com
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nyour-key-here\n-----END PRIVATE KEY-----\n"
+
+# OpenAI (server-side only) - powers the AI chat assistant and the restock
+# recommendations. Use your own key from https://platform.openai.com/api-keys.
+# Without it the dashboard still works; the AI endpoints just answer 503.
+OPENAI_API_KEY=sk-...
+# Optional - only needed for API keys scoped to a specific project.
+# OPENAI_PROJECT_ID=proj_...
+# Optional - override the models used (defaults: gpt-5.6-luna for chat,
+# gpt-5.6-terra for recommendations).
+# OPENAI_CHAT_MODEL=
+# OPENAI_RECOMMENDATIONS_MODEL=
+# Optional - any OpenAI-compatible Chat Completions endpoint (Azure OpenAI,
+# OpenRouter, a local server, ...). Defaults to https://api.openai.com/v1.
+# OPENAI_BASE_URL=
+# Optional - per-user monthly cap on AI chat messages (default 120), so one
+# account can't run up your OpenAI bill.
+# AI_CHAT_MONTHLY_LIMIT=120
+
+# Shopify OAuth (server-side only) - from YOUR OWN app in the Shopify Partner
+# Dashboard / Dev Dashboard (see README). Only needed for the "Connect with
+# Shopify" button; pasting an Admin API access token works without it.
+# The redirect URL registered on the app under "Allowed redirection URL(s)"
+# must exactly match {origin}/api/shopify/oauth/callback for every origin you
+# use (e.g. http://localhost:8788/api/shopify/oauth/callback for local dev).
+SHOPIFY_API_KEY=your_client_id
+SHOPIFY_API_SECRET=your_client_secret
+# Comma-separated, no spaces. Matches what the app actually reads today.
+SHOPIFY_SCOPES=read_products,read_orders,read_customers

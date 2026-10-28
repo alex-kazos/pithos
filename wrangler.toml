@@ -1,0 +1,17 @@
+# Cloudflare Pages configuration
+name = "stockpilot-ai"
+compatibility_date = "2025-06-26"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = "dist"
+
+# Environment variables
+[env.production]
+# Production environment variables go here
+# Example:
+# VITE_FIREBASE_PROJECT_ID = "your-firebase-project-id"
+
+[env.preview]
+# Preview environment variables go here
+
+# Note: Triggers/crons are not used in Cloudflare Pages
+# They must be configured separately via the Cloudflare dashboard

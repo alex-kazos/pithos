@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 240" width="760" height="240" font-family="Manrope, Helvetica, Arial, sans-serif">
+  <rect x="0" y="0" width="760" height="240" rx="20" fill="#101018"></rect>
+  <g transform="translate(48,48)">
+    <clipPath id="sq"><rect x="0" y="0" width="144" height="144" rx="32.4"></rect></clipPath>
+    <g clip-path="url(#sq)">
+      <rect x="0" y="0" width="144" height="144" fill="#101018"></rect>
+      <g transform="scale(1.44)">
+        <rect x="21" y="56" width="12" height="22" rx="4" fill="#4B4BC8"></rect>
+        <rect x="40" y="44" width="12" height="34" rx="4" fill="#6366F1"></rect>
+        <rect x="59" y="30" width="12" height="48" rx="4" fill="#8F90FF"></rect>
+        <path d="M24 40 L46 26 L62 33 L80 17" fill="none" stroke="#F2F2FA" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"></path>
+        <path d="M68 15 L82 14 L81 28" fill="none" stroke="#F2F2FA" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"></path>
+      </g>
+    </g>
+  </g>
+  <text x="228" y="146" font-size="76" font-weight="800" letter-spacing="-1.5" fill="#F2F2FA">StockPilot<tspan font-size="26" font-weight="700" dy="-38" dx="8" fill="#9A9AB0">™</tspan></text>
+</svg>

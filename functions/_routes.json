@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "include": ["/*"],
+  "exclude": ["/assets/*", "/images/*"],
+  "routes": [
+    {
+      "pattern": "/api/shopify/*",
+      "function": "api/shopify/[[path]]"
+    },
+    {
+      "pattern": "/*",
+      "serve": "index.html"
+    }
+  ]
+}
