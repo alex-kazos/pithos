@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Mail, Lock, User, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { GoogleButton } from '../components/auth/GoogleButton';
+import { getConfig } from '../services/api';
 
 const STEPS = [
   { n: 1, label: 'Account' },
@@ -18,6 +19,14 @@ export function AuthPage() {
   const [showPassword, setShowPassword] = useState(false);
 
   const { signIn, signUp } = useAuth();
+  // Google sign-in only shows when the deployment has configured it.
+  const [googleEnabled, setGoogleEnabled] = useState(false);
+
+  useEffect(() => {
+    getConfig()
+      .then(config => setGoogleEnabled(config.googleSignIn))
+      .catch(() => setGoogleEnabled(false));
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -132,13 +141,17 @@ export function AuthPage() {
             )}
           </button>
 
-          <div className="flex items-center gap-2.5 my-0.5">
-            <div className="flex-1 h-px bg-white/[0.08]" />
-            <span className="text-[11px] text-white/35">or</span>
-            <div className="flex-1 h-px bg-white/[0.08]" />
-          </div>
+          {googleEnabled && (
+            <>
+              <div className="flex items-center gap-2.5 my-0.5">
+                <div className="flex-1 h-px bg-white/[0.08]" />
+                <span className="text-[11px] text-white/35">or</span>
+                <div className="flex-1 h-px bg-white/[0.08]" />
+              </div>
 
-          <GoogleButton />
+              <GoogleButton />
+            </>
+          )}
         </form>
 
         <button

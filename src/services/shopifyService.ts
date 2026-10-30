@@ -1,18 +1,7 @@
 import axios, { AxiosInstance } from 'axios';
-import { getFirestore, doc, getDoc } from 'firebase/firestore';
 import { ShopifyProduct, ShopifyOrder } from '../types/shopify';
-import { getAuth } from 'firebase/auth';
 import { logger } from '../utils/logger';
 import { StoreFetchResult, StoreConnectionIssue, toStoreIssue } from '../utils/storeHealth';
-
-interface ShopifyCredentials {
-  apiToken: string;
-  shopUrl: string;
-  userId: string;
-  createdAt: string;
-  storeId: string;
-  isActive: boolean;
-}
 
 /** Health checks shouldn't make the merchant wait out a full 30s data-fetch timeout. */
 const HEALTH_CHECK_TIMEOUT_MS = 12000;
@@ -41,63 +30,18 @@ class ShopifyService {
   }
 
   /**
-   * Fetches a specific store's credentials by id, bypassing the isActive
-   * flag entirely - used for "All Stores" aggregate fetches, which query
-   * every connected store regardless of which one is currently active.
+   * Every request names its store with x-store-id; the server proxy looks
+   * up (and decrypts) that store's access token, which never reaches the
+   * browser. The session cookie authenticates the call.
    */
-  private async getCredentialsById(storeId: string): Promise<ShopifyCredentials> {
-    const auth = getAuth();
-    const user = auth.currentUser;
-
-    if (!user) {
-      throw new Error('User not authenticated');
-    }
-
-    const db = getFirestore();
-    const storeDoc = await getDoc(doc(db, 'users', user.uid, 'stores', storeId));
-
-    if (!storeDoc.exists()) {
-      throw new Error(`Store ${storeId} not found`);
-    }
-
-    const storeData = storeDoc.data() as ShopifyCredentials;
-    storeData.shopUrl = storeData.shopUrl.replace(/^https?:\/\//, '');
-    storeData.storeId = storeId;
-    return storeData;
-  }
-
-  private async createShopifyClient(token: string, shopUrl: string, storeId?: string) {
-    const auth = getAuth();
-    const user = auth.currentUser;
-
-    if (!user) {
-      throw new Error('User not authenticated');
-    }
-
-    const idToken = await user.getIdToken();
-
-    logger.debug('ShopifyService', 'Creating Shopify client', {
-      fileName: this.fileName,
-      userId: user.uid,
-      storeId: storeId || 'legacy'
-    });
-
-    const headers: Record<string, string> = {
-      'content-type': 'application/json',
-      'accept': 'application/json',
-      'x-shopify-access-token': token,
-      'authorization': `Bearer ${idToken}`,
-      'x-shop-domain': shopUrl
-    };
-
-    // Add storeId header if available
-    if (storeId) {
-      headers['x-store-id'] = storeId;
-    }
-
+  private createShopifyClient(storeId: string): AxiosInstance {
     return axios.create({
       baseURL: '/api/shopify',
-      headers,
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json',
+        'x-store-id': storeId,
+      },
       timeout: 30000,
       validateStatus: (status) => {
         return status >= 200 && status < 300 && status !== 303;
@@ -205,8 +149,7 @@ class ShopifyService {
   async getProductsForStores(storeIds: string[]): Promise<StoreFetchResult<ShopifyProduct>> {
     const results = await Promise.allSettled(
       storeIds.map(async (storeId) => {
-        const { apiToken, shopUrl } = await this.getCredentialsById(storeId);
-        const client = await this.createShopifyClient(apiToken, shopUrl, storeId);
+        const client = this.createShopifyClient(storeId);
         return this.getAllPages<ShopifyProduct>(client, `/admin/api/${this.shopifyApiVersion}/products`, 'products');
       })
     );
@@ -223,8 +166,7 @@ class ShopifyService {
   async getOrdersForStores(storeIds: string[]): Promise<StoreFetchResult<ShopifyOrder>> {
     const results = await Promise.allSettled(
       storeIds.map(async (storeId) => {
-        const { apiToken, shopUrl } = await this.getCredentialsById(storeId);
-        const client = await this.createShopifyClient(apiToken, shopUrl, storeId);
+        const client = this.createShopifyClient(storeId);
         return this.getAllPages<ShopifyOrder>(client, `/admin/api/${this.shopifyApiVersion}/orders`, 'orders', { status: 'any' });
       })
     );
@@ -265,13 +207,12 @@ class ShopifyService {
   }
 
   /**
-   * Cheapest request that still exercises the full path (Firestore doc ->
-   * credentials -> proxy -> Shopify), used by Manage Stores to re-check a
-   * store on demand. Resolves when the store is healthy, throws otherwise.
+   * Cheapest request that still exercises the full path (stored credentials
+   * -> proxy -> Shopify), used by Manage Stores to re-check a store on
+   * demand. Resolves when the store is healthy, throws otherwise.
    */
   async checkStore(storeId: string): Promise<void> {
-    const { apiToken, shopUrl } = await this.getCredentialsById(storeId);
-    const client = await this.createShopifyClient(apiToken, shopUrl, storeId);
+    const client = this.createShopifyClient(storeId);
     await client.get(`/admin/api/${this.shopifyApiVersion}/products?limit=1`, { timeout: HEALTH_CHECK_TIMEOUT_MS });
   }
 

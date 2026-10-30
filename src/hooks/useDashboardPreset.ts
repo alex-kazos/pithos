@@ -1,9 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { toLayoutDocId } from '../utils/storeDisplay';
 import { DEFAULT_PRESET_ID } from '../constants/dashboardWidgets';
+import { getLayoutPreset, setLayoutPreset } from '../services/api';
 
 interface UseDashboardPresetReturn {
   presetId: string;
@@ -32,12 +31,9 @@ export function useDashboardPreset(storeId: string): UseDashboardPresetReturn {
     }
 
     setLoading(true);
-    const docRef = doc(db, 'users', user.uid, 'dashboardLayouts', toLayoutDocId(storeId));
-    getDoc(docRef)
-      .then(snapshot => {
-        if (cancelled) return;
-        const preset = snapshot.exists() ? (snapshot.data().preset as string | undefined) : undefined;
-        setPresetIdState(preset || DEFAULT_PRESET_ID);
+    getLayoutPreset(toLayoutDocId(storeId))
+      .then(preset => {
+        if (!cancelled) setPresetIdState(preset || DEFAULT_PRESET_ID);
       })
       .catch(() => {
         if (!cancelled) setPresetIdState(DEFAULT_PRESET_ID);
@@ -54,8 +50,7 @@ export function useDashboardPreset(storeId: string): UseDashboardPresetReturn {
   const setPresetId = useCallback((next: string) => {
     setPresetIdState(next);
     if (!user?.uid || !storeId) return;
-    const docRef = doc(db, 'users', user.uid, 'dashboardLayouts', toLayoutDocId(storeId));
-    setDoc(docRef, { preset: next, updatedAt: new Date().toISOString() }, { merge: true }).catch(() => {
+    setLayoutPreset(toLayoutDocId(storeId), next).catch(() => {
       // Best-effort persistence - a failed write just means the preset resets to
       // last-saved on reload, not a broken UI.
     });

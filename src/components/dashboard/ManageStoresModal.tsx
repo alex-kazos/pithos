@@ -1,7 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Store, ShoppingBag, Trash2, CheckCircle2, Loader2, AlertTriangle, RefreshCw, Plug } from 'lucide-react';
-import { collection, getDocs, doc, deleteDoc, setDoc } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLockBodyScroll } from '../../hooks/useLockBodyScroll';
 import { getStoreDisplayName } from '../../utils/storeDisplay';
@@ -13,6 +11,7 @@ import {
   toStoreIssue,
 } from '../../utils/storeHealth';
 import { readConnectionRecord, recordStoreHealth, seedConnectionRecord } from '../../services/storeHealthService';
+import { deleteStore, listStores } from '../../services/api';
 import { shopifyService } from '../../services/shopifyService';
 import { woocommerceService } from '../../services/woocommerceService';
 import { logger } from '../../utils/logger';
@@ -89,18 +88,16 @@ export function ManageStoresModal({ onClose, issues = [] }: ManageStoresModalPro
     if (!user) return;
     setLoading(true);
     try {
-      const snapshot = await getDocs(collection(db, `users/${user.uid}/stores`));
-      const rows: StoreRow[] = snapshot.docs.map(d => {
-        const data = d.data();
-        const health = readConnectionRecord(data);
-        // The dashboard writes health back to these docs; seeding from the
+      const rows: StoreRow[] = (await listStores()).map(store => {
+        const health = readConnectionRecord(store.connection);
+        // The dashboard writes health back to the server; seeding from the
         // read we just did stops it rewriting a verdict already stored.
-        seedConnectionRecord(user.uid, d.id, health);
+        seedConnectionRecord(user.uid, store.id, health);
         return {
-          id: d.id,
-          name: data.shopUrl || data.storeUrl || d.id,
-          type: (data.platform as StoreRow['type']) || 'shopify',
-          isActive: !!data.isActive,
+          id: store.id,
+          name: store.url,
+          type: store.platform,
+          isActive: store.isActive,
           health,
         };
       });
@@ -181,13 +178,13 @@ export function ManageStoresModal({ onClose, issues = [] }: ManageStoresModalPro
     setError(null);
 
     try {
-      await deleteDoc(doc(db, `users/${user.uid}/stores`, store.id));
+      // The server keeps exactly one store active: deleting the active one
+      // hands that over to the oldest remaining store.
+      await deleteStore(store.id);
 
-      // Keep exactly one store active whenever possible - if we just
-      // deleted the active one and others remain, activate the next.
       const remaining = stores.filter(s => s.id !== store.id);
       if (store.isActive && remaining.length > 0) {
-        await setDoc(doc(db, `users/${user.uid}/stores`, remaining[0].id), { isActive: true }, { merge: true });
+        remaining[0] = { ...remaining[0], isActive: true };
       }
 
       setStores(remaining);

@@ -1,8 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
-import { collection, getDocs } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
 import { useAuth } from '../../contexts/AuthContext';
+import { authClient } from '../../lib/authClient';
+import {
+  deleteAccount,
+  deleteOpenAIKey,
+  getOpenAIKeyStatus,
+  listStores,
+  saveOpenAIKey,
+  type OpenAIKeyStatus,
+} from '../../services/api';
 import { useUserPreferences, UserPreferences, ThemePreference, AICadence } from '../../hooks/useUserPreferences';
 import { useDashboardPreset } from '../../hooks/useDashboardPreset';
 import { VISIBLE_DASHBOARD_PRESETS, DASHBOARD_WIDGET_CATALOG } from '../../constants/dashboardWidgets';
@@ -29,7 +36,7 @@ const NAV_GROUPS: { group: string; items: { id: SectionId; label: string }[] }[]
       { id: 'stores', label: 'Stores' },
       { id: 'dashboard', label: 'Dashboard' },
       { id: 'thresholds', label: 'Thresholds' },
-      { id: 'ai', label: 'AI usage' },
+      { id: 'ai', label: 'AI & API key' },
     ],
   },
   { group: 'DANGER', items: [{ id: 'danger', label: 'Delete account' }] },
@@ -43,7 +50,7 @@ const SECTION_COPY: Record<SectionId, [string, string]> = {
   stores: ['Stores', 'Manage the stores connected to this account.'],
   dashboard: ['Dashboard layout', "Pick the preset that matches how this store is run. It applies to Overview for everyone on the account."],
   thresholds: ['Thresholds', 'What counts as urgent, everywhere in the app.'],
-  ai: ['AI usage', 'Chat messages against your monthly quota.'],
+  ai: ['AI', 'Chat and recommendations run on your own OpenAI API key.'],
   danger: ['Delete account', 'This cannot be undone.'],
 };
 
@@ -159,16 +166,12 @@ function StoresSection({ onCountChange }: { onCountChange: (count: number) => vo
     if (!user) return;
     setLoading(true);
     try {
-      const snapshot = await getDocs(collection(db, 'users', user.uid, 'stores'));
-      const rows: StoreRow[] = snapshot.docs.map(d => {
-        const data = d.data();
-        return {
-          id: d.id,
-          name: getStoreDisplayName(data.shopUrl || data.storeUrl || d.id),
-          type: data.platform || 'shopify',
-          isActive: !!data.isActive,
-        };
-      });
+      const rows: StoreRow[] = (await listStores()).map(store => ({
+        id: store.id,
+        name: getStoreDisplayName(store.url),
+        type: store.platform,
+        isActive: store.isActive,
+      }));
       setStores(rows);
       onCountChange(rows.length);
     } finally {
@@ -287,75 +290,156 @@ function ThresholdsSection({
   );
 }
 
-interface ChatUsage {
-  used: number;
-  limit: number;
-  resetsAt: string;
+function OpenAIKeyCard() {
+  const [status, setStatus] = useState<OpenAIKeyStatus | null>(null);
+  const [draft, setDraft] = useState('');
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<{ type: 'success' | 'error' | 'warning'; text: string } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getOpenAIKeyStatus()
+      .then(result => { if (!cancelled) setStatus(result); })
+      .catch(err => { if (!cancelled) setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed to load your API key' }); });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleSave = async () => {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const result = await saveOpenAIKey(draft);
+      setStatus(result);
+      setDraft('');
+      setEditing(false);
+      setMessage(result.warning ? { type: 'warning', text: result.warning } : { type: 'success', text: 'Key saved.' });
+    } catch (err) {
+      setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed to save your API key' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleRemove = async () => {
+    if (!window.confirm('Remove your OpenAI API key? AI chat and recommendations stop working until you add one again.')) return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      setStatus(await deleteOpenAIKey());
+    } catch (err) {
+      setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed to remove your API key' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const showForm = editing || (status !== null && !status.configured);
+
+  return (
+    <div className="p-4 rounded-xl bg-surface border border-white/[0.07] flex flex-col gap-3">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <div className="font-archivo font-semibold text-[13px] text-white">OpenAI API key</div>
+          <div className="mt-[3px] font-archivo text-[11.5px] leading-snug text-white/40">
+            Stored encrypted and only ever used on the server for your own requests. Usage is billed to your OpenAI account.
+          </div>
+        </div>
+        {status?.configured && !editing && (
+          <span className="flex-none font-mono-ibm font-semibold text-[10px] px-2 py-[3px] rounded-full bg-band-green/[0.14] text-[#7fd4a8]">
+            SAVED {status.hint}
+          </span>
+        )}
+      </div>
+
+      {status === null && !message && <p className="font-archivo text-[12.5px] text-white/45">Loading…</p>}
+
+      {showForm ? (
+        <div className="flex flex-col gap-2">
+          <input
+            type="password"
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            placeholder="sk-…"
+            autoComplete="off"
+            spellCheck={false}
+            className="px-3.5 py-2.5 rounded-[9px] border border-white/[0.09] bg-white/[0.03] text-white text-[13px] font-mono-ibm outline-none focus:border-accent/60"
+          />
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={busy || !draft.trim()}
+              className="px-[15px] py-2 rounded-[9px] bg-accent hover:bg-accent-hover text-canvas font-archivo font-semibold text-[12px] disabled:opacity-50"
+            >
+              {busy ? 'Checking…' : 'Save key'}
+            </button>
+            {status?.configured && (
+              <button
+                type="button"
+                onClick={() => { setEditing(false); setDraft(''); setMessage(null); }}
+                disabled={busy}
+                className="px-[13px] py-2 rounded-[9px] text-white/50 hover:text-white font-archivo font-medium text-[12px]"
+              >
+                Cancel
+              </button>
+            )}
+            <a
+              href="https://platform.openai.com/api-keys"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="ml-auto font-archivo text-[11.5px] text-accent-soft hover:text-white"
+            >
+              Get a key
+            </a>
+          </div>
+        </div>
+      ) : status?.configured ? (
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => { setEditing(true); setMessage(null); }}
+            disabled={busy}
+            className="px-3 py-2 rounded-lg border border-white/[0.12] text-white/65 hover:text-white font-archivo font-medium text-xs disabled:opacity-50"
+          >
+            Replace
+          </button>
+          <button
+            type="button"
+            onClick={handleRemove}
+            disabled={busy}
+            className="px-3 py-2 rounded-lg border border-band-red/30 text-[#ff9d93] hover:bg-band-red/[0.08] font-archivo font-medium text-xs disabled:opacity-50"
+          >
+            Remove
+          </button>
+        </div>
+      ) : null}
+
+      {message && (
+        <p
+          className={`font-archivo text-[12px] ${
+            message.type === 'success' ? 'text-band-green' : message.type === 'warning' ? 'text-band-amber' : 'text-band-red'
+          }`}
+        >
+          {message.text}
+        </p>
+      )}
+    </div>
+  );
 }
 
-function AIUsageSection({
+function AISection({
   preferences,
   setPreferences,
 }: {
   preferences: UserPreferences;
   setPreferences: (patch: Partial<UserPreferences>) => void;
 }) {
-  const { user } = useAuth();
-  const [usage, setUsage] = useState<ChatUsage | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      if (!user) return;
-      try {
-        const idToken = await user.getIdToken();
-        const response = await fetch('/api/openai/usage', { headers: { authorization: `Bearer ${idToken}` } });
-        if (!response.ok) throw new Error('Failed to load AI usage');
-        const data = await response.json();
-        if (!cancelled) setUsage(data.usage);
-      } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load AI usage');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [user]);
-
-  const resetsInDays = usage
-    ? Math.max(0, Math.ceil((new Date(usage.resetsAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000)))
-    : null;
-
   return (
     <div className="max-w-[620px] flex flex-col gap-[18px]">
-      <div className="p-4 rounded-xl bg-surface border border-white/[0.07]">
-        {loading ? (
-          <p className="font-archivo text-[12.5px] text-white/45">Loading…</p>
-        ) : error ? (
-          <p className="font-archivo text-[12.5px] text-band-red">{error}</p>
-        ) : usage ? (
-          <>
-            <div className="flex items-baseline justify-between">
-              <span className="font-archivo font-semibold text-[13px] text-white">Chat messages</span>
-              <span className="font-mono-ibm font-semibold text-xs text-white/60">
-                {usage.used} / {usage.limit}
-              </span>
-            </div>
-            <div className="mt-[11px] h-2 rounded-full bg-white/[0.06]">
-              <div
-                className={`h-2 rounded-full ${usage.used >= usage.limit ? 'bg-band-red' : 'bg-accent'}`}
-                style={{ width: `${Math.min(100, (usage.used / usage.limit) * 100)}%` }}
-              />
-            </div>
-            {resetsInDays !== null && <p className="mt-3 font-archivo text-[11.5px] text-white/40">Resets in {resetsInDays}d</p>}
-          </>
-        ) : null}
-      </div>
+      <OpenAIKeyCard />
       <div className="flex flex-col">
         <SettingsRow
           title="Refresh cadence"
@@ -464,7 +548,7 @@ function ProfileSection() {
       const emailChanged = email !== (user?.email || '');
       if (nameChanged) await updateProfile(fullName);
       if (emailChanged) await updateEmail(email);
-      setMessage({ type: 'success', text: emailChanged ? 'Saved. Check your new inbox to confirm the email change.' : 'Saved.' });
+      setMessage({ type: 'success', text: 'Saved.' });
     } catch (err) {
       setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed to save changes' });
     } finally {
@@ -495,7 +579,7 @@ function ProfileSection() {
           onChange={e => setEmail(e.target.value)}
           className="px-3.5 py-2.5 rounded-[9px] border border-white/[0.09] bg-white/[0.03] text-white text-[13px] font-archivo outline-none focus:border-accent/60"
         />
-        <span className="font-archivo text-[11px] text-white/35">Changing this sends a confirmation link to the new address</span>
+        <span className="font-archivo text-[11px] text-white/35">You sign in with this address</span>
       </label>
       {message && (
         <p className={`font-archivo text-[12px] ${message.type === 'success' ? 'text-band-green' : 'text-band-red'}`}>{message.text}</p>
@@ -529,21 +613,38 @@ function SecuritySection({
   preferences: UserPreferences;
   setPreferences: (patch: Partial<UserPreferences>) => void;
 }) {
-  const { user, signOut, sendPasswordReset } = useAuth();
-  const isGoogle = user?.providerData?.[0]?.providerId === 'google.com';
-  const [resetMsg, setResetMsg] = useState<string | null>(null);
-  const [resetting, setResetting] = useState(false);
+  const { user, signOut, changePassword } = useAuth();
+  // Which sign-in methods this account has: 'credential' (email + password) and/or 'google'.
+  const [providers, setProviders] = useState<string[] | null>(null);
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [passwordMsg, setPasswordMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  const handleResetPassword = async () => {
-    setResetting(true);
-    setResetMsg(null);
+  useEffect(() => {
+    authClient
+      .listAccounts()
+      .then(result => setProviders(result.data ? result.data.map(account => account.providerId) : []))
+      .catch(() => setProviders([]));
+  }, []);
+
+  const hasPassword = providers?.includes('credential') ?? false;
+  const isGoogle = providers?.includes('google') ?? false;
+
+  const handleChangePassword = async () => {
+    setSaving(true);
+    setPasswordMsg(null);
     try {
-      await sendPasswordReset();
-      setResetMsg('Password reset email sent.');
+      await changePassword(currentPassword, newPassword);
+      setPasswordMsg({ type: 'success', text: 'Password changed. Other devices have been signed out.' });
+      setShowPasswordForm(false);
+      setCurrentPassword('');
+      setNewPassword('');
     } catch (err) {
-      setResetMsg(err instanceof Error ? err.message : 'Failed to send reset email');
+      setPasswordMsg({ type: 'error', text: err instanceof Error ? err.message : 'Failed to change password' });
     } finally {
-      setResetting(false);
+      setSaving(false);
     }
   };
 
@@ -551,7 +652,7 @@ function SecuritySection({
     <div className="max-w-[620px] flex flex-col">
       <SettingsRow
         title={user?.email || ''}
-        description={isGoogle ? 'Signed in with Google' : 'Signed in with email & password'}
+        description={isGoogle && !hasPassword ? 'Signed in with Google' : 'Signed in with email & password'}
         control={
           <button
             type="button"
@@ -567,22 +668,55 @@ function SecuritySection({
         description="Add an extra layer of security to your account"
         control={<Toggle checked={preferences.twoFactorEnabled} onChange={v => setPreferences({ twoFactorEnabled: v })} />}
       />
-      <SettingsRow
-        border={false}
-        title="Password"
-        description="Set one to sign in without Google"
-        control={
+      {hasPassword && (
+        <SettingsRow
+          border={false}
+          title="Password"
+          description="Used with your email to sign in"
+          control={
+            <button
+              type="button"
+              onClick={() => { setShowPasswordForm(open => !open); setPasswordMsg(null); }}
+              className="flex-none px-[11px] py-[7px] rounded-lg border border-white/[0.12] text-white/65 hover:text-white font-archivo font-medium text-[11.5px]"
+            >
+              {showPasswordForm ? 'Cancel' : 'Change password'}
+            </button>
+          }
+        />
+      )}
+      {showPasswordForm && (
+        <div className="flex flex-col gap-2.5 max-w-[360px] pb-2">
+          <input
+            type="password"
+            value={currentPassword}
+            onChange={e => setCurrentPassword(e.target.value)}
+            placeholder="Current password"
+            autoComplete="current-password"
+            className="px-3.5 py-2.5 rounded-[9px] border border-white/[0.09] bg-white/[0.03] text-white text-[13px] font-archivo outline-none focus:border-accent/60"
+          />
+          <input
+            type="password"
+            value={newPassword}
+            onChange={e => setNewPassword(e.target.value)}
+            placeholder="New password (min. 8 characters)"
+            autoComplete="new-password"
+            className="px-3.5 py-2.5 rounded-[9px] border border-white/[0.09] bg-white/[0.03] text-white text-[13px] font-archivo outline-none focus:border-accent/60"
+          />
           <button
             type="button"
-            onClick={handleResetPassword}
-            disabled={resetting}
-            className="flex-none px-[11px] py-[7px] rounded-lg border border-white/[0.12] text-white/65 hover:text-white font-archivo font-medium text-[11.5px] disabled:opacity-50"
+            onClick={handleChangePassword}
+            disabled={saving || !currentPassword || newPassword.length < 8}
+            className="self-start px-[15px] py-2 rounded-[9px] bg-accent hover:bg-accent-hover text-canvas font-archivo font-semibold text-[12px] disabled:opacity-50"
           >
-            {resetting ? 'Sending…' : 'Change password'}
+            {saving ? 'Saving…' : 'Update password'}
           </button>
-        }
-      />
-      {resetMsg && <p className="mt-2 font-archivo text-[12px] text-white/60">{resetMsg}</p>}
+        </div>
+      )}
+      {passwordMsg && (
+        <p className={`mt-2 font-archivo text-[12px] ${passwordMsg.type === 'success' ? 'text-band-green' : 'text-band-red'}`}>
+          {passwordMsg.text}
+        </p>
+      )}
     </div>
   );
 }
@@ -624,7 +758,7 @@ function NotificationsSection({
 const CONFIRM_PHRASE = 'DELETE';
 
 function DangerSection({ refetch }: { refetch: () => Promise<void> }) {
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
   const [clearing, setClearing] = useState(false);
   const [clearedMsg, setClearedMsg] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -650,16 +784,12 @@ function DangerSection({ refetch }: { refetch: () => Promise<void> }) {
     setDeleting(true);
     setError(null);
     try {
-      const idToken = await user.getIdToken();
-      const response = await fetch('/api/account/delete-data', {
-        method: 'POST',
-        headers: { authorization: `Bearer ${idToken}` },
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.error || 'Failed to delete account data');
-      await signOut();
+      await deleteAccount();
+      cacheService.clearCache(user.uid);
+      // The session went with the account - a full reload resets the app.
+      window.location.href = '/';
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete account data');
+      setError(err instanceof Error ? err.message : 'Failed to delete your account');
       setDeleting(false);
     }
   };
@@ -689,7 +819,7 @@ function DangerSection({ refetch }: { refetch: () => Promise<void> }) {
           <div>
             <div className="font-archivo font-semibold text-[13px] text-[#ff9d93]">Delete account</div>
             <div className="mt-1 font-archivo text-[11.5px] leading-snug text-white/50">
-              Removes your stores, cached data and recommendations. This cannot be undone.
+              Removes your login, stores, saved API key and recommendations. This cannot be undone.
             </div>
           </div>
           {!confirmOpen && (
@@ -795,7 +925,7 @@ export default function SettingsRoute() {
           {section === 'dashboard' && <DashboardPresetSection storeKey={storeKey} />}
           {section === 'stores' && <StoresSection onCountChange={setStoreCount} />}
           {section === 'thresholds' && <ThresholdsSection preferences={preferences} setPreferences={setPreferences} />}
-          {section === 'ai' && <AIUsageSection preferences={preferences} setPreferences={setPreferences} />}
+          {section === 'ai' && <AISection preferences={preferences} setPreferences={setPreferences} />}
           {section === 'appearance' && <AppearanceSection preferences={preferences} setPreferences={setPreferences} />}
           {section === 'profile' && <ProfileSection />}
           {section === 'security' && <SecuritySection preferences={preferences} setPreferences={setPreferences} />}

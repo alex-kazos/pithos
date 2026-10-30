@@ -1,7 +1,7 @@
 /**
  * Fully synthetic data for the public "/demo" experience - two fictional
  * stores that exist only in this file. None of it is read from or written
- * to Firebase, Shopify, WooCommerce, or any real account: it exists purely
+ * to the database, Shopify, WooCommerce, or any real account: it exists purely
  * so an anonymous visitor can see the dashboard's visuals populated with
  * realistic-looking numbers before signing up.
  */

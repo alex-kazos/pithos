@@ -28,7 +28,6 @@ export function AssistantSidebar() {
     messages,
     isLoading,
     error,
-    usage,
     sendMessage,
     startNewChat,
     sessions,
@@ -167,20 +166,6 @@ export function AssistantSidebar() {
         </div>
       ) : (
         <>
-          {usage && (
-            <div className="flex-none px-4 py-2 border-b border-white/[0.06] flex items-center justify-between gap-3 text-[11px] text-white/40">
-              <span>
-                {usage.used} / {usage.limit} messages this month
-              </span>
-              <div className="w-20 h-1.5 rounded-full bg-white/[0.08] overflow-hidden">
-                <div
-                  className={`h-full rounded-full ${usage.used >= usage.limit ? 'bg-band-red' : 'bg-accent'}`}
-                  style={{ width: `${Math.min(100, (usage.used / usage.limit) * 100)}%` }}
-                />
-              </div>
-            </div>
-          )}
-
           <div className="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col gap-3">
             {visibleMessages.length === 0 && (
               <div className="flex flex-col gap-2">

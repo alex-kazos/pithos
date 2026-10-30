@@ -1,19 +1,8 @@
 import axios, { AxiosInstance } from 'axios';
-import { getFirestore, doc, getDoc } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
 import { ShopifyProduct, ShopifyOrder } from '../types/shopify';
 import { WooCommerceProduct, WooCommerceOrder } from '../types/woocommerce';
 import { logger } from '../utils/logger';
 import { StoreFetchResult, StoreConnectionIssue, toStoreIssue } from '../utils/storeHealth';
-
-interface WooCommerceCredentials {
-  storeUrl: string;
-  consumerKey: string;
-  consumerSecret: string;
-  userId: string;
-  storeId: string;
-  isActive: boolean;
-}
 
 /**
  * WooCommerce products/orders don't share Shopify's shape, but everything
@@ -71,33 +60,15 @@ class WooCommerceService {
     return WooCommerceService.instance;
   }
 
-  private async getCredentialsById(storeId: string): Promise<WooCommerceCredentials> {
-    const user = getAuth().currentUser;
-    if (!user) throw new Error('User not authenticated');
-
-    const db = getFirestore();
-    const storeDoc = await getDoc(doc(db, 'users', user.uid, 'stores', storeId));
-    if (!storeDoc.exists()) throw new Error(`Store ${storeId} not found`);
-
-    const data = storeDoc.data() as WooCommerceCredentials;
-    data.storeId = storeId;
-    return data;
-  }
-
-  private async createClient(storeId?: string): Promise<AxiosInstance> {
-    const user = getAuth().currentUser;
-    if (!user) throw new Error('User not authenticated');
-
-    const idToken = await user.getIdToken();
-    const headers: Record<string, string> = {
-      'content-type': 'application/json',
-      authorization: `Bearer ${idToken}`,
-    };
-    if (storeId) headers['x-store-id'] = storeId;
-
+  /**
+   * Every request names its store with x-store-id; the server proxy looks
+   * up (and decrypts) that store's consumer key/secret, which never reach
+   * the browser. The session cookie authenticates the call.
+   */
+  private createClient(storeId: string): AxiosInstance {
     return axios.create({
       baseURL: '/api/woocommerce',
-      headers,
+      headers: { 'content-type': 'application/json', 'x-store-id': storeId },
       timeout: 30000,
     });
   }
@@ -121,8 +92,7 @@ class WooCommerceService {
   async getProductsForStores(storeIds: string[]): Promise<StoreFetchResult<ShopifyProduct>> {
     const results = await Promise.allSettled(
       storeIds.map(async storeId => {
-        await this.getCredentialsById(storeId); // validates the store exists before fetching
-        const client = await this.createClient(storeId);
+        const client = this.createClient(storeId);
         return this.getAllPages<WooCommerceProduct>(client, '/products');
       })
     );
@@ -135,8 +105,7 @@ class WooCommerceService {
   async getOrdersForStores(storeIds: string[]): Promise<StoreFetchResult<ShopifyOrder>> {
     const results = await Promise.allSettled(
       storeIds.map(async storeId => {
-        await this.getCredentialsById(storeId);
-        const client = await this.createClient(storeId);
+        const client = this.createClient(storeId);
         return this.getAllPages<WooCommerceOrder>(client, '/orders');
       })
     );
@@ -176,13 +145,12 @@ class WooCommerceService {
   }
 
   /**
-   * Cheapest request that still exercises the full path (Firestore doc ->
-   * credentials -> proxy -> WooCommerce), used by Manage Stores to re-check
-   * a store on demand. Resolves when healthy, throws otherwise.
+   * Cheapest request that still exercises the full path (stored credentials
+   * -> proxy -> WooCommerce), used by Manage Stores to re-check a store on
+   * demand. Resolves when healthy, throws otherwise.
    */
   async checkStore(storeId: string): Promise<void> {
-    await this.getCredentialsById(storeId);
-    const client = await this.createClient(storeId);
+    const client = this.createClient(storeId);
     await client.get('/products', { params: { per_page: 1 }, timeout: HEALTH_CHECK_TIMEOUT_MS });
   }
 }

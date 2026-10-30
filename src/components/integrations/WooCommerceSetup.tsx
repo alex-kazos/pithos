@@ -1,10 +1,8 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLockBodyScroll } from '../../hooks/useLockBodyScroll';
-import { doc, collection, query, where, getDocs, writeBatch } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
 import { CheckCircle } from 'lucide-react';
-import { readJsonResponse, readJsonResponseOrEmpty } from '../../utils/apiResponse';
+import { connectWooCommerceStore, startStoreOAuth } from '../../services/api';
 
 // Mirrors functions/lib/wooCommerceAuth.ts's validation - duplicated client-side
 // (same pattern as ShopifySetup.tsx) since backend-only modules aren't bundled
@@ -34,10 +32,6 @@ function validateWooCommerceInputs(storeUrl: string, consumerKey: string, consum
     return 'Enter a valid Consumer Secret (starts with cs_)';
   }
   return null;
-}
-
-function storeIdFromUrl(storeUrl: string): string {
-  return new URL(storeUrl).hostname.replace(/[^a-z0-9-]/gi, '-').toLowerCase();
 }
 
 // Deep-links straight to WooCommerce's "create key" screen instead of making
@@ -88,20 +82,10 @@ export function WooCommerceSetup({ onClose, standalone = false, isOnboarding = f
     setOauthError(null);
 
     try {
-      const idToken = await user.getIdToken();
-      const response = await fetch('/api/woocommerce/oauth/start', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', authorization: `Bearer ${idToken}` },
-        body: JSON.stringify({ storeUrl: connectStoreUrl.trim(), onboarding: isOnboarding }),
-      });
-
-      const data = await readJsonResponse<{ url?: string; error?: string }>(response);
-      if (!response.ok || !data.url) {
-        throw new Error(data.error || 'Failed to start WooCommerce connection');
-      }
+      const url = await startStoreOAuth('woocommerce', connectStoreUrl.trim(), isOnboarding);
 
       // Full-page navigation to the store's own wp-admin authorization screen.
-      window.location.href = data.url;
+      window.location.href = url;
     } catch (err) {
       setOauthError(err instanceof Error ? err.message : 'Failed to start WooCommerce connection');
       setOauthLoading(false);
@@ -125,49 +109,9 @@ export function WooCommerceSetup({ onClose, standalone = false, isOnboarding = f
     setError(null);
 
     try {
-      const normalizedStoreUrl = normalizeStoreUrlInput(storeUrl)!;
-      const storeId = storeIdFromUrl(normalizedStoreUrl);
-
-      const storeData = {
-        storeUrl: normalizedStoreUrl,
-        consumerKey: consumerKey.trim(),
-        consumerSecret: consumerSecret.trim(),
-        platform: 'woocommerce' as const,
-        userId: user.uid,
-        storeId,
-        isActive: true,
-        authMethod: 'manual',
-        createdAt: new Date().toISOString(),
-      };
-
-      // Exactly one store may be isActive at a time - deactivate any others
-      // before activating this one (same rule as Shopify stores).
-      const storesRef = collection(db, `users/${user.uid}/stores`);
-      const activeStoresSnapshot = await getDocs(query(storesRef, where('isActive', '==', true)));
-      const batch = writeBatch(db);
-      activeStoresSnapshot.docs.forEach(activeDoc => {
-        if (activeDoc.id !== storeId) {
-          batch.set(activeDoc.ref, { isActive: false }, { merge: true });
-        }
-      });
-      batch.set(doc(db, `users/${user.uid}/stores`, storeId), storeData);
-      await batch.commit();
-
-      // Test the connection through the real proxy before declaring success.
-      const idToken = await user.getIdToken();
-      const response = await fetch('/api/woocommerce/products', {
-        method: 'GET',
-        headers: {
-          authorization: `Bearer ${idToken}`,
-          'x-store-id': storeId,
-          'content-type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        const body = await readJsonResponseOrEmpty<{ error?: string }>(response);
-        throw new Error(body.error || `Connection test failed (HTTP ${response.status}).`);
-      }
+      // The server tests the keys against the store before saving them, and
+      // stores them encrypted - they are never readable from the browser again.
+      await connectWooCommerceStore(normalizeStoreUrlInput(storeUrl)!, consumerKey.trim(), consumerSecret.trim());
 
       setShowSuccess(true);
       setTimeout(() => {

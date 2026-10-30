@@ -1,28 +1,26 @@
-import { doc, setDoc } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { recordStoreConnection } from './api';
 import { logger } from '../utils/logger';
 import { StoreConnectionIssue, StoreIssueReason } from '../utils/storeHealth';
 
 /**
- * The health verdict persisted on each `users/{uid}/stores/{storeId}` doc.
+ * The health verdict persisted on each connected store (the `connection`
+ * column of the server's stores table).
  *
  * Manage Stores needs to show a store as broken the moment it's opened -
  * including on a fresh page load, before any dashboard fetch has run - so
- * the outcome of every fetch is written back to the store doc rather than
- * kept only in React state. Reconnecting a store overwrites the whole doc
- * (ShopifySetup/WooCommerceSetup both `set` without merge), which clears
- * these fields automatically.
+ * the outcome of every fetch is written back to the server rather than kept
+ * only in React state. Reconnecting a store clears it.
  */
 export interface StoreConnectionRecord {
   status: 'ok' | 'error';
   reason?: StoreIssueReason;
   detail?: string;
-  /** ISO timestamp - avoids pulling Firestore Timestamps through the UI. */
+  /** ISO timestamp. */
   checkedAt?: string;
 }
 
-export function readConnectionRecord(storeData: Record<string, unknown> | undefined): StoreConnectionRecord | null {
-  const raw = storeData?.connection;
+/** Validates a stored verdict, so a malformed one reads as "never checked". */
+export function readConnectionRecord(raw: unknown): StoreConnectionRecord | null {
   if (typeof raw !== 'object' || raw === null) return null;
 
   const { status, reason, detail, checkedAt } = raw as Record<string, unknown>;
@@ -39,7 +37,7 @@ export function readConnectionRecord(storeData: Record<string, unknown> | undefi
 /**
  * Last status written per store this session. Data refetches run on every
  * store switch and manual sync; without this, a stable store would take a
- * Firestore write each time just to restate "still fine".
+ * server write each time just to restate "still fine".
  */
 const lastWritten = new Map<string, string>();
 
@@ -53,8 +51,8 @@ function fingerprint(record: StoreConnectionRecord): string {
 }
 
 /**
- * Seeds the dedupe cache from store docs that were just read anyway, so a
- * page load doesn't rewrite a verdict Firestore already holds.
+ * Seeds the dedupe cache from stores that were just listed anyway, so a
+ * page load doesn't rewrite a verdict the server already holds.
  */
 export function seedConnectionRecord(userId: string, storeId: string, record: StoreConnectionRecord | null): void {
   if (record) lastWritten.set(cacheKey(userId, storeId), fingerprint(record));
@@ -66,7 +64,7 @@ async function writeRecord(userId: string, storeId: string, record: StoreConnect
   if (!force && lastWritten.get(key) === fingerprint(record)) return;
 
   try {
-    await setDoc(doc(db, `users/${userId}/stores`, storeId), { connection: record }, { merge: true });
+    await recordStoreConnection(storeId, record);
     lastWritten.set(key, fingerprint(record));
   } catch (error) {
     // Health tracking is diagnostic - never let a failed write surface as a

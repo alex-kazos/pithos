@@ -23,6 +23,7 @@ export function GoogleButton() {
   return (
     <div className="w-full flex flex-col gap-2">
       <button
+        type="button"
         onClick={handleGoogleSignIn}
         disabled={loading}
         className="w-full flex items-center justify-center gap-2.5 py-[11px] rounded-[9px] border border-white/[0.12] text-white font-medium text-[13px] font-archivo hover:border-white/25 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"

@@ -1,10 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLockBodyScroll } from '../../hooks/useLockBodyScroll';
-import { doc, collection, query, where, getDocs, writeBatch } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
 import { Youtube, CheckCircle } from 'lucide-react';
-import { readJsonResponse, readJsonResponseOrEmpty } from '../../utils/apiResponse';
+import { connectShopifyStore, getConfig, startStoreOAuth } from '../../services/api';
 
 // e.g. "my-store" or "my-store.myshopify.com" - letters, digits, and hyphens only
 const SHOP_URL_PATTERN = /^[a-z0-9][a-z0-9-]*(\.myshopify\.com)?\/?$/i;
@@ -54,6 +52,14 @@ export function ShopifySetup({ onClose, standalone = false, isOnboarding = false
   const [showSuccess, setShowSuccess] = useState(false);
   const { user } = useAuth();
 
+  // One-click connect needs a Shopify app configured on the server; without
+  // one, open on the access-token form instead.
+  useEffect(() => {
+    getConfig()
+      .then(config => { if (!config.shopifyOAuth) setShowAdvanced(true); })
+      .catch(() => {});
+  }, []);
+
   const handleConnectWithShopify = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) {
@@ -70,23 +76,10 @@ export function ShopifySetup({ onClose, standalone = false, isOnboarding = false
     setOauthError(null);
 
     try {
-      const idToken = await user.getIdToken();
-      const response = await fetch('/api/shopify/oauth/start', {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          authorization: `Bearer ${idToken}`,
-        },
-        body: JSON.stringify({ shop: normalizedShop, onboarding: isOnboarding }),
-      });
-
-      const data = await readJsonResponse<{ url?: string; error?: string }>(response);
-      if (!response.ok || !data.url) {
-        throw new Error(data.error || 'Failed to start Shopify connection');
-      }
+      const url = await startStoreOAuth('shopify', normalizedShop, isOnboarding);
 
       // Full-page navigation to Shopify's own authorization screen.
-      window.location.href = data.url;
+      window.location.href = url;
     } catch (err) {
       setOauthError(err instanceof Error ? err.message : 'Failed to start Shopify connection');
       setOauthLoading(false);
@@ -111,66 +104,10 @@ export function ShopifySetup({ onClose, standalone = false, isOnboarding = false
     setError(null);
 
     try {
-      console.log('Starting Shopify store connection...');
-      console.log('Current user ID:', user.uid);
+      // The server checks the token against the shop before saving it, and
+      // stores it encrypted - it is never readable from the browser again.
+      await connectShopifyStore(normalizeShopInput(shopUrl), apiToken.trim());
 
-      // Format shop URL
-      const normalizedShopUrl = normalizeShopInput(shopUrl);
-      const formattedShopUrl = normalizedShopUrl.includes('.myshopify.com') ? normalizedShopUrl : `${normalizedShopUrl}.myshopify.com`;
-
-      // Generate storeId from shopUrl
-      const storeId = formattedShopUrl.replace(/\.myshopify\.com\/?$/, '');
-
-      // Store Shopify credentials in Firebase using the multi-store structure
-      // Store goes into users/{userId}/stores/{storeId}
-      const storeData = {
-        shopUrl: formattedShopUrl,
-        apiToken,
-        userId: user.uid,
-        storeId,
-        isActive: true, // Make this the active store
-        createdAt: new Date().toISOString()
-      };
-
-      console.log('Attempting to write to Firestore...');
-
-      // Exactly one store may be isActive at a time - deactivate any others
-      // before activating this one.
-      const storesRef = collection(db, `users/${user.uid}/stores`);
-      const activeStoresQuery = query(storesRef, where('isActive', '==', true));
-      const activeStoresSnapshot = await getDocs(activeStoresQuery);
-      const batch = writeBatch(db);
-      activeStoresSnapshot.docs.forEach(activeDoc => {
-        if (activeDoc.id !== storeId) {
-          batch.set(activeDoc.ref, { isActive: false }, { merge: true });
-        }
-      });
-      const storeDocRef = doc(db, `users/${user.uid}/stores`, storeId);
-      batch.set(storeDocRef, storeData);
-      await batch.commit();
-      console.log('Successfully wrote to Firestore');
-
-      // Test the connection
-      console.log('Testing API connection...');
-      const idToken = await user.getIdToken();
-      const response = await fetch('/api/shopify/products', {
-        method: 'GET',
-        headers: {
-          'x-shopify-access-token': apiToken,
-          'x-shop-domain': formattedShopUrl,
-          'authorization': `Bearer ${idToken}`,
-          'content-type': 'application/json',
-          'accept': 'application/json'
-        },
-        credentials: 'include'
-      });
-
-      if (!response.ok) {
-        const body = await readJsonResponseOrEmpty<{ error?: string }>(response);
-        throw new Error(body.error || `Connection test failed (HTTP ${response.status}).`);
-      }
-
-      console.log('API connection successful');
       setShowSuccess(true);
       setTimeout(() => {
         onClose();

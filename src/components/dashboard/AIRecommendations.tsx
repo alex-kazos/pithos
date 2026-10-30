@@ -116,8 +116,7 @@ export const AIRecommendations: React.FC<AIRecommendationsProps> = ({ products, 
       setError(null);
 
       try {
-        const idToken = await user.getIdToken();
-        const cached = await fetchCachedRecommendations(storeKey, idToken);
+        const cached = await fetchCachedRecommendations(storeKey);
         if (cancelled) return;
 
         // A cached set less than a week old is shown as-is - no OpenAI call.
@@ -149,7 +148,7 @@ export const AIRecommendations: React.FC<AIRecommendationsProps> = ({ products, 
           reason: cached ? 'stale cache' : 'no cache'
         });
 
-        const fresh = await generateRecommendations(products, storeKey, idToken);
+        const fresh = await generateRecommendations(products, storeKey);
         if (cancelled) return;
 
         resolvedForStoreRef.current = storeKey;
@@ -180,8 +179,7 @@ export const AIRecommendations: React.FC<AIRecommendationsProps> = ({ products, 
     setError(null);
 
     try {
-      const idToken = await user.getIdToken();
-      const fresh = await generateRecommendations(products, storeKey, idToken);
+      const fresh = await generateRecommendations(products, storeKey);
       resolvedForStoreRef.current = storeKey;
       setRecommendations(fresh.recommendations);
       setGeneratedAt(fresh.generatedAt);

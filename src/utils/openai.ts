@@ -40,12 +40,9 @@ export interface CachedRecommendations {
  * on switching to it, rather than regenerating every time.
  */
 export const fetchCachedRecommendations = async (
-  storeKey: string,
-  idToken: string
+  storeKey: string
 ): Promise<CachedRecommendations | null> => {
-  const response = await fetch(`/api/openai/recommendations?storeKey=${encodeURIComponent(storeKey)}`, {
-    headers: { authorization: `Bearer ${idToken}` },
-  });
+  const response = await fetch(`/api/openai/recommendations?storeKey=${encodeURIComponent(storeKey)}`);
 
   if (!response.ok) {
     throw new Error('Failed to load cached recommendations');
@@ -57,8 +54,7 @@ export const fetchCachedRecommendations = async (
 
 export const generateRecommendations = async (
   products: Product[],
-  storeKey: string,
-  idToken: string
+  storeKey: string
 ): Promise<CachedRecommendations> => {
   // Process products to ensure SKU is available
   const processedProducts = products.map(product => ({
@@ -174,7 +170,6 @@ Provide up to 5 actionable recommendations.`;
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          authorization: `Bearer ${idToken}`,
         },
         body: JSON.stringify({ messages, storeKey }),
       });

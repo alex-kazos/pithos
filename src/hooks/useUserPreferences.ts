@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
+import { getPreferences, updatePreferences } from '../services/api';
 
 export type ThemePreference = 'dark' | 'light' | 'system';
 export type AICadence = 'realtime' | 'daily' | 'weekly';
@@ -55,12 +54,9 @@ export function useUserPreferences(): UseUserPreferencesReturn {
       return;
     }
     setLoading(true);
-    const docRef = doc(db, 'users', user.uid, 'settings', 'preferences');
-    getDoc(docRef)
-      .then(snapshot => {
-        if (cancelled) return;
-        const data = snapshot.exists() ? (snapshot.data() as Partial<UserPreferences>) : undefined;
-        setPreferencesState({ ...DEFAULT_PREFERENCES, ...data });
+    getPreferences<UserPreferences>()
+      .then(saved => {
+        if (!cancelled) setPreferencesState({ ...DEFAULT_PREFERENCES, ...saved });
       })
       .catch(() => { if (!cancelled) setPreferencesState(DEFAULT_PREFERENCES); })
       .finally(() => { if (!cancelled) setLoading(false); });
@@ -70,8 +66,7 @@ export function useUserPreferences(): UseUserPreferencesReturn {
   const setPreferences = useCallback((patch: Partial<UserPreferences>) => {
     setPreferencesState(prev => ({ ...prev, ...patch }));
     if (!user?.uid) return;
-    const docRef = doc(db, 'users', user.uid, 'settings', 'preferences');
-    setDoc(docRef, { ...patch, updatedAt: new Date().toISOString() }, { merge: true }).catch(() => {});
+    updatePreferences<UserPreferences>(patch).catch(() => {});
   }, [user?.uid]);
 
   return { preferences, loading, setPreferences };

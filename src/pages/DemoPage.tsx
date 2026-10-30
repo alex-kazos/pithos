@@ -2,7 +2,7 @@
  * Public, unauthenticated "/demo" experience. Reuses the real dashboard
  * shell and widgets for visual parity, but every number on screen comes
  * from src/data/demoStore.ts - two fictional stores that exist only in
- * that file. Nothing here reads or writes Firebase, Shopify, WooCommerce,
+ * that file. Nothing here reads or writes the database, Shopify, WooCommerce,
  * or any other real account/store/data.
  */
 import { useCallback, useMemo, useState } from 'react';

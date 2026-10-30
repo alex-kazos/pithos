@@ -1,5 +1,3 @@
-import { db } from '../lib/firebase';
-import { addDoc, collection } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
 
 type LogLevel = 'info' | 'success' | 'warning' | 'error' | 'debug';
@@ -139,15 +137,8 @@ class Logger {
     return data;
   }
 
-  private async saveToFirebase(batch: LogBatch): Promise<void> {
-    try {
-      const sanitizedBatch = this.sanitizeData(batch);
-      const logsCollection = collection(db, 'logBatches');
-      // await addDoc(logsCollection, sanitizedBatch);
-    } catch (error) {
-      console.error('Failed to save log batch to Firebase:', error);
-    }
-  }
+  /** Remote log shipping isn't wired up - batches only ever reach the console. */
+  private async persistBatch(_batch: LogBatch): Promise<void> {}
 
   private scheduleBatchFlush(): void {
     if (this.batchTimeoutId === null) {
@@ -185,7 +176,7 @@ class Logger {
         console.error('Failed to send logs via beacon:', error);
       }
     } else {
-      await this.saveToFirebase(batch);
+      await this.persistBatch(batch);
     }
   }
 

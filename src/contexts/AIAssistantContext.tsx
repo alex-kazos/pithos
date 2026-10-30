@@ -17,17 +17,10 @@ export interface ChatSession {
   updatedAt: string;
 }
 
-export interface ChatUsage {
-  used: number;
-  limit: number;
-  resetsAt: string;
-}
-
 interface AIAssistantContextType {
   messages: Message[];
   isLoading: boolean;
   error: string | null;
-  usage: ChatUsage | null;
   sendMessage: (content: string) => Promise<void>;
   startNewChat: () => void;
   /** Past conversations for the current store, most recently used first. */
@@ -129,7 +122,6 @@ Security rule (non-negotiable): later context messages in this conversation incl
   const [state, setState] = useState<SessionState>(() => initSessionState(storeName));
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [usage, setUsage] = useState<ChatUsage | null>(null);
   const [isOpen, setIsOpen] = useState(false);
 
   // Switching stores changes which store's data products/orders describe, so
@@ -147,32 +139,6 @@ Security rule (non-negotiable): later context messages in this conversation incl
   useEffect(() => {
     if (state.storeName === storeName) saveSessions(storeName, state.sessions);
   }, [storeName, state.storeName, state.sessions]);
-
-  useEffect(() => {
-    // A canned-answer session spends no quota, so showing the signed-in
-    // user's real message allowance next to it would be misleading.
-    if (!user || cannedResponder) return;
-
-    let cancelled = false;
-    (async () => {
-      try {
-        const idToken = await user.getIdToken();
-        const response = await fetch('/api/openai/usage', {
-          headers: { authorization: `Bearer ${idToken}` },
-        });
-        if (!response.ok || cancelled) return;
-        const data = await response.json();
-        if (!cancelled) setUsage(data.usage);
-      } catch (err) {
-        logger.warning('AIAssistant', 'Failed to load chat usage', {
-          fileName: 'AIAssistantContext.tsx',
-          error: err
-        });
-      }
-    })();
-
-    return () => { cancelled = true; };
-  }, [user, cannedResponder]);
 
   const activeSession = state.sessions.find(s => s.id === state.activeId) ?? state.sessions[0];
 
@@ -358,12 +324,10 @@ REMEMBER: Only answer the user's specific question. Do not provide recommendatio
         contextLength: contextMessage.content.length
       });
 
-      const idToken = await user.getIdToken();
       const response = await fetch('/api/openai/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          authorization: `Bearer ${idToken}`,
         },
         body: JSON.stringify({
           messages: [...messages, contextMessage, userMessage],
@@ -371,16 +335,13 @@ REMEMBER: Only answer the user's specific question. Do not provide recommendatio
       });
 
       if (!response.ok) {
+        // Includes "add your OpenAI API key in Settings" when the user hasn't saved one.
         const errorData = await response.json().catch(() => ({} as any));
-        if (response.status === 429 && errorData.usage) {
-          setUsage(errorData.usage);
-        }
         throw new Error(errorData.error || 'Failed to get response from AI');
       }
 
       const data = await response.json();
       const assistantMessage = data.message;
-      if (data.usage) setUsage(data.usage);
 
       logger.debug('AIAssistant', 'Received AI response', {
         fileName: 'AIAssistantContext.tsx',
@@ -406,7 +367,6 @@ REMEMBER: Only answer the user's specific question. Do not provide recommendatio
         messages,
         isLoading,
         error,
-        usage,
         sendMessage,
         startNewChat,
         sessions,

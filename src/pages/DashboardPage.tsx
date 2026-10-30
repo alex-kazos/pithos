@@ -10,8 +10,6 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useStoreData, StoreRef, StorePlatform } from '../hooks/useStoreData';
-import { collection, getDocs, query, where, doc, writeBatch } from 'firebase/firestore';
-import { db } from '../lib/firebase';
 import { StoreSetupWizard } from '../components/onboarding/StoreSetupWizard';
 import { FirstSyncScreen } from '../components/onboarding/FirstSyncScreen';
 import { logger } from '../utils/logger';
@@ -31,6 +29,7 @@ import { Toast } from '../components/ui/Toast';
 import { ALL_STORES_ID, ALL_SHOPIFY_ID, ALL_WOOCOMMERCE_ID, getStoreDisplayName } from '../utils/storeDisplay';
 import { readConnectionRecord, recordStoreHealth, seedConnectionRecord } from '../services/storeHealthService';
 import { fetchCachedRecommendations, type CachedRecommendations } from '../utils/openai';
+import { activateStore, listStores } from '../services/api';
 
 // Define store interface for different platform integrations
 interface Store {
@@ -146,7 +145,7 @@ export const DashboardPage: React.FC = () => {
     if (!store || !user) return;
 
     // Switch the view first: the fetch is keyed by store id now, so it no
-    // longer has to wait for Firestore's isActive flags to agree with the
+    // longer has to wait for the stored isActive flag to agree with the
     // selection. (When it did, the two raced - the fetch fired against the
     // still-old isActive state - and a failed write left the click doing
     // nothing at all.) Credentials are read fresh per store on every fetch,
@@ -154,19 +153,9 @@ export const DashboardPage: React.FC = () => {
     setCurrentStore(store);
 
     try {
-      // isActive still has to be maintained: it's what the proxies fall back
-      // to without an x-store-id header, and what marks the active store in
-      // Manage Stores. Exactly one store may hold it.
-      const storesRef = collection(db, `users/${user.uid}/stores`);
-      const activeStoresSnapshot = await getDocs(query(storesRef, where('isActive', '==', true)));
-      const batch = writeBatch(db);
-      activeStoresSnapshot.docs.forEach(activeDoc => {
-        if (activeDoc.id !== storeId) {
-          batch.set(activeDoc.ref, { isActive: false }, { merge: true });
-        }
-      });
-      batch.set(doc(db, `users/${user.uid}/stores`, storeId), { isActive: true }, { merge: true });
-      await batch.commit();
+      // isActive still has to be maintained: it's which store opens next
+      // time, and what marks the active store in Manage Stores.
+      await activateStore(storeId);
     } catch (error) {
       // The view has already switched and reads correct data regardless -
       // this only means the flag lags behind until the next switch.
@@ -183,21 +172,15 @@ export const DashboardPage: React.FC = () => {
       if (!user) return;
 
       try {
-        const storesRef = collection(db, 'users', user.uid, 'stores');
-        const storeDocs = await getDocs(storesRef);
-        // `platform` is a newer field - stores connected before WooCommerce
-        // support predate it and default to 'shopify'.
-        const connectedStores: Store[] = storeDocs.docs.map(doc => {
-          const data = doc.data();
-          const platform = (data.platform as Store['type']) || 'shopify';
+        const connectedStores: Store[] = (await listStores()).map(store => {
           // Seeds the health cache with whatever verdict is already stored,
           // so the first fetch of the session only writes on a real change.
-          seedConnectionRecord(user.uid, doc.id, readConnectionRecord(data));
+          seedConnectionRecord(user.uid, store.id, readConnectionRecord(store.connection));
           return {
-            id: doc.id,
-            name: data.shopUrl || data.storeUrl,
-            type: platform,
-            isActive: data.isActive
+            id: store.id,
+            name: store.url,
+            type: store.platform,
+            isActive: store.isActive
           };
         });
 
@@ -234,7 +217,7 @@ export const DashboardPage: React.FC = () => {
     if (!dataLoading && !dataError) setLastSyncedAt(new Date());
   }, [dataLoading, dataError]);
 
-  // Persist each store's verdict onto its own Firestore doc, so Manage Stores
+  // Persist each store's verdict on the server, so Manage Stores
   // can show a broken store as broken immediately on a fresh page load -
   // before any fetch has had time to fail again.
   useEffect(() => {
@@ -258,8 +241,7 @@ export const DashboardPage: React.FC = () => {
       }
 
       try {
-        const idToken = await user.getIdToken();
-        const cached = await fetchCachedRecommendations(currentStore.id, idToken);
+        const cached = await fetchCachedRecommendations(currentStore.id);
         if (!cancelled) setCachedRecommendations(cached);
       } catch {
         if (!cancelled) setCachedRecommendations(null);
