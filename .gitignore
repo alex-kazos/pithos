@@ -1,0 +1,120 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Dependencies
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*~
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+
+# prompt
+prompt
+prompt.*
+# API Keys and Secrets
+**/apikey.*
+**/api_key.*
+**/*_key.*
+**/*.key
+**/*.pem
+**/*.crt
+**/*.cer
+**/*.der
+**/*.pfx
+**/*.p12
+**/*.keystore
+**/*.jks
+
+# Credentials and Tokens
+**/*credential*
+**/*secret*
+**/*token*
+**/*.password
+**/*.pwd
+
+# Config files that might contain sensitive data
+**/config.json
+**/config.js
+**/settings.json
+**/settings.js
+# NOTE: a blanket **/*.config.js / **/*.config.ts rule used to live here and
+# silently swallowed legitimate build-tool configs (tailwind.config.js,
+# eslint.config.js, vitest.config.ts, ...) from every commit - tailwind's
+# missing content config meant the production build shipped almost no
+# generated Tailwind CSS. Sensitive files are already covered by the
+# *secret*/*credential*/*token*/*.key patterns below; don't re-add a
+# wildcard *.config.* rule.
+
+# Database files
+**/*.sqlite
+**/*.db
+**/*.sql
+
+# Additional environment files
+.env*
+!.env.example
+
+# Local development configurations
+**/local.settings.json
+**/local.config.json
+**/*.local.*
+
+
+# Service account files
+**/*service-account*.json
+**/*serviceaccount*.json
+
+# Python virtual environment
+backend/venv/
+backend/__pycache__/
+backend/*.pyc
+backend/*.pyo
+backend/*.pyd
+.Python
+*.py[cod]
+*$py.class
+*.pyc
+
+# VS Code specific
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+
+# TypeScript
+*.tsbuildinfo
+.eslintcache
+
+# Testing
+coverage/
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Bundled API server (npm run build:server)
+dist-server
