@@ -51,6 +51,46 @@ describe('/api/stores', () => {
     expect(listStores).toHaveBeenCalledWith('user-1');
   });
 
+  it('exchanges a Dev Dashboard client ID + secret for a token and saves all of it', async () => {
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ access_token: 'issued-token', scope: 'read_products,read_orders', expires_in: 86399 }),
+    });
+
+    const response = await post({ platform: 'shopify', shop: 'my-store', clientId: ' client-id-123 ', clientSecret: 'client-secret-123' });
+
+    expect(response.status).toBe(201);
+    expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0]).toBe('https://my-store.myshopify.com/admin/oauth/access_token');
+    expect(saveStore).toHaveBeenCalledWith('user-1', {
+      id: 'my-store',
+      platform: 'shopify',
+      url: 'my-store.myshopify.com',
+      credentials: {
+        clientId: 'client-id-123',
+        clientSecret: 'client-secret-123',
+        accessToken: 'issued-token',
+        tokenExpiresAt: expect.any(String),
+      },
+      authMethod: 'client_credentials',
+      scope: 'read_products,read_orders',
+    });
+  });
+
+  it('does not save a client ID + secret Shopify refuses, and says why', async () => {
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      ok: false,
+      status: 400,
+      json: async () => ({ error: 'shop_not_permitted' }),
+    });
+
+    const response = await post({ platform: 'shopify', shop: 'my-store', clientId: 'client-id-123', clientSecret: 'client-secret-123' });
+
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toMatch(/same organization/);
+    expect(saveStore).not.toHaveBeenCalled();
+  });
+
   it('verifies a pasted Shopify token against the shop before saving it', async () => {
     (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ok: true, status: 200 });
 

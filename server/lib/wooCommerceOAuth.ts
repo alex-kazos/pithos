@@ -13,7 +13,7 @@ import { basicAuthHeader } from './wooCommerceAuth';
  */
 export function buildAuthorizeUrl(storeUrl: string, nonce: string, returnUrl: string, callbackUrl: string): string {
   const url = new URL(`${storeUrl}/wc-auth/v1/authorize`);
-  url.searchParams.set('app_name', 'StockPilot');
+  url.searchParams.set('app_name', 'Pithos');
   url.searchParams.set('scope', 'read'); // read-only: nothing in this app writes back to the store
   url.searchParams.set('user_id', nonce);
   url.searchParams.set('return_url', returnUrl);

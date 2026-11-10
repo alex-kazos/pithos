@@ -2,7 +2,7 @@ import { readJsonResponse } from '../utils/apiResponse';
 import type { StoreConnectionRecord } from './storeHealthService';
 
 /**
- * Typed client for StockPilot's own /api routes (server/app.ts). Requests
+ * Typed client for Pithos's own /api routes (server/app.ts). Requests
  * are same-origin, so the session cookie rides along automatically.
  */
 export class ApiError extends Error {
@@ -69,8 +69,16 @@ export async function listStores(): Promise<StoreSummary[]> {
   return (await request<{ stores: StoreSummary[] }>('/api/stores')).stores;
 }
 
-export async function connectShopifyStore(shop: string, apiToken: string): Promise<StoreSummary> {
-  return (await request<{ store: StoreSummary }>('/api/stores', { method: 'POST', ...json({ platform: 'shopify', shop, apiToken }) })).store;
+/**
+ * A Dev Dashboard app's client ID + secret (apps created since 2026), or an
+ * Admin API access token from an older custom app.
+ */
+export type ShopifyCredentialsInput = { clientId: string; clientSecret: string } | { apiToken: string };
+
+export async function connectShopifyStore(shop: string, credentials: ShopifyCredentialsInput): Promise<StoreSummary> {
+  return (
+    await request<{ store: StoreSummary }>('/api/stores', { method: 'POST', ...json({ platform: 'shopify', shop, ...credentials }) })
+  ).store;
 }
 
 export async function connectWooCommerceStore(

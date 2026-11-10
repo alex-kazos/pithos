@@ -36,7 +36,7 @@ export function StoreSetupWizard() {
         <div className="mt-6 text-center">
           <h1 className="text-[22px] font-semibold tracking-tight">Connect your store</h1>
           <p className="mt-2 text-[12.5px] leading-relaxed text-white/45">
-            StockPilot reads products and orders only. It never writes to your store without you confirming an action.
+            Pithos reads products and orders only. It never writes to your store without you confirming an action.
           </p>
         </div>
 

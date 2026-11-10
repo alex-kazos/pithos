@@ -10,7 +10,7 @@ import { saveStore } from '../../lib/stores';
  * (the merchant's browser separately lands on `return_url` from
  * oauthStart.ts, which we don't control the timing/response of). There's
  * no signature to verify on this POST, so every other safeguard matters
- * more: the one-time nonce ties this back to the right StockPilot user and
+ * more: the one-time nonce ties this back to the right Pithos user and
  * the right store, and verifyWooCommerceKeysWork() confirms the keys
  * actually work against that specific store before anything is saved.
  */

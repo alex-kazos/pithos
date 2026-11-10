@@ -3,7 +3,7 @@ import type { StorePlatform } from './stores';
 
 /**
  * One-time state tying a Shopify/WooCommerce connect callback back to the
- * StockPilot user who started it. The platform calls our callback directly
+ * Pithos user who started it. The platform calls our callback directly
  * (no session cookie we can rely on), so this row is the only link.
  */
 const STATE_TTL_MS = 10 * 60 * 1000; // 10 minutes

@@ -49,8 +49,8 @@ export function AuthPage() {
     <div className="min-h-screen bg-canvas flex items-center justify-center p-6 font-archivo">
       <div className="w-full max-w-[420px] flex flex-col items-center p-8 sm:p-10 rounded-2xl bg-canvas-2 border border-white/[0.07] text-white">
         <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg bg-accent flex items-center justify-center font-bold text-sm text-canvas">S</div>
-          <span className="font-bold text-base tracking-tight">StockPilot</span>
+          <img src="/images/logo/pithos-icon.svg" alt="" className="w-7 h-7 rounded-lg" />
+          <span className="font-bold text-base tracking-tight">Pithos</span>
         </div>
 
         <h1 className="mt-5 text-[23px] font-semibold tracking-tight text-center">
@@ -58,7 +58,7 @@ export function AuthPage() {
         </h1>
         <p className="mt-1.5 text-[12.5px] leading-relaxed text-white/45 text-center max-w-[320px]">
           {isSignUp
-            ? "Connect a store and StockPilot starts reading its last twelve months on its own."
+            ? "Connect a store and Pithos starts reading its last twelve months on its own."
             : 'Sign in to pick up your recommendation queue where you left it.'}
         </p>
 
@@ -159,7 +159,7 @@ export function AuthPage() {
           onClick={() => setIsSignUp(!isSignUp)}
           className="mt-5 text-[12.5px] font-medium text-accent-soft hover:text-white transition-colors"
         >
-          {isSignUp ? 'Already have an account? Sign in' : 'New to StockPilot? Create an account'}
+          {isSignUp ? 'Already have an account? Sign in' : 'New to Pithos? Create an account'}
         </button>
 
         <div className="mt-6 pt-5 border-t border-white/[0.07] w-full flex justify-center gap-2">

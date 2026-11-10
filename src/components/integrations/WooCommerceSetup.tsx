@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLockBodyScroll } from '../../hooks/useLockBodyScroll';
-import { CheckCircle } from 'lucide-react';
+import { BookOpen, CheckCircle } from 'lucide-react';
 import { connectWooCommerceStore, startStoreOAuth } from '../../services/api';
 
 // Mirrors functions/lib/wooCommerceAuth.ts's validation - duplicated client-side
@@ -153,7 +153,7 @@ export function WooCommerceSetup({ onClose, standalone = false, isOnboarding = f
         <div className="text-center mb-6">
           <h2 className="text-[22px] font-semibold tracking-tight text-white mb-2">Connect your WooCommerce store</h2>
           <p className="text-[12.5px] leading-relaxed text-white/45">
-            StockPilot reads products and orders only. It never writes to your store without you confirming an action.
+            Pithos reads products and orders only. It never writes to your store without you confirming an action.
           </p>
         </div>
       )}
@@ -258,6 +258,16 @@ export function WooCommerceSetup({ onClose, standalone = false, isOnboarding = f
                 required
               />
             </label>
+
+            <a
+              href="https://woocommerce.com/document/woocommerce-rest-api/#generate-keys"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 text-[12px] font-medium text-accent-soft hover:text-white transition-colors"
+            >
+              <BookOpen className="w-3.5 h-3.5" />
+              How do I generate REST API keys? (WooCommerce docs) →
+            </a>
 
             {keyUrl ? (
               <a

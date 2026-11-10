@@ -2,11 +2,13 @@ import { verifyAuth } from '../../lib/auth';
 import { jsonResponse } from '../../lib/http';
 import { normalizeShopDomain } from '../../lib/shopifyOAuth';
 import { getStore } from '../../lib/stores';
+import { getShopifyAccessToken } from '../../lib/shopifyToken';
+import { ClientCredentialsError } from '../../lib/shopifyOAuth';
 
 /**
  * Server-side proxy for the Shopify Admin API. The browser names a store
- * with the x-store-id header; its access token is looked up (and decrypted)
- * here and never leaves the server.
+ * with the x-store-id header; its access token is looked up (and decrypted,
+ * or renewed for client-credentials apps) here and never leaves the server.
  */
 export async function onRequest(context: { request: Request }) {
   const { request } = context;
@@ -23,12 +25,19 @@ export async function onRequest(context: { request: Request }) {
     }
 
     const store = await getStore(auth.uid, storeId);
-    if (!store || store.platform !== 'shopify' || !('apiToken' in store.credentials)) {
+    const accessToken = store && store.platform === 'shopify' ? await getShopifyAccessToken(auth.uid, store) : null;
+    if (!store || !accessToken) {
       return jsonResponse({ error: 'Store not found' }, 404);
     }
 
-    return makeShopifyRequest(request, store.url, store.credentials.apiToken);
+    return makeShopifyRequest(request, store.url, accessToken);
   } catch (error) {
+    if (error instanceof ClientCredentialsError) {
+      // Shopify would not issue a fresh token: report it like a revoked token
+      // (upstream 401) so the dashboard asks the merchant to reconnect.
+      const status = error.reason === 'unreachable' ? 502 : 401;
+      return jsonResponse({ error: error.message, upstreamStatus: status }, status);
+    }
     console.error('Shopify proxy error:', (error as Error).message);
     return jsonResponse({ error: (error as Error).message }, 500);
   }

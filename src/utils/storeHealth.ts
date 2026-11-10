@@ -51,7 +51,7 @@ interface IssueCopy {
 export const STORE_ISSUE_COPY: Record<StoreIssueReason, IssueCopy> = {
   auth: {
     label: 'Access revoked',
-    description: 'StockPilot is no longer authorised to read this store. Reconnect it to restore syncing.',
+    description: 'Pithos is no longer authorised to read this store. Reconnect it to restore syncing.',
     suggestedAction: 'reconnect',
   },
   not_found: {
@@ -71,7 +71,7 @@ export const STORE_ISSUE_COPY: Record<StoreIssueReason, IssueCopy> = {
   },
   api_error: {
     label: 'Sync unavailable',
-    description: 'StockPilot could not reach its own sync service, so this store was never contacted. Nothing is wrong with your store.',
+    description: 'Pithos could not reach its own sync service, so this store was never contacted. Nothing is wrong with your store.',
     suggestedAction: 'retry',
   },
   unknown: {

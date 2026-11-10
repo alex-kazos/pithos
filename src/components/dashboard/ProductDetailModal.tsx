@@ -161,7 +161,7 @@ export function ProductDetailModal({ row, rows, products, orders, thresholds, on
         </div>
 
         <div className="mx-[22px] mt-[18px] p-3.5 px-4 rounded-lg border border-accent/[0.14] bg-accent/[0.05]">
-          <div className="text-[11px] font-semibold text-accent-soft">What StockPilot reads from this</div>
+          <div className="text-[11px] font-semibold text-accent-soft">What Pithos reads from this</div>
           <p className="mt-1.5 text-xs leading-relaxed text-white/70">{insightFor(row, thresholds)}</p>
         </div>
 

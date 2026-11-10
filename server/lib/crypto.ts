@@ -23,7 +23,7 @@ function getKey(): Buffer {
     throw new Error('BETTER_AUTH_SECRET must be set to at least 32 characters (try `openssl rand -base64 32`).');
   }
 
-  cachedKey = Buffer.from(hkdfSync('sha256', secret, 'stockpilot', 'stockpilot:secrets:v1', 32));
+  cachedKey = Buffer.from(hkdfSync('sha256', secret, 'pithos', 'pithos:secrets:v1', 32));
   return cachedKey;
 }
 

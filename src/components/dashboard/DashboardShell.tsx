@@ -137,8 +137,8 @@ export const DashboardShell: React.FC<DashboardShellProps> = ({
     <div className={`${fullHeight ? 'h-screen' : 'h-full'} flex bg-canvas text-white font-archivo overflow-hidden`}>
       <aside className="w-[216px] flex-none bg-canvas-2 border-r border-white/[0.06] p-3.5 flex flex-col gap-5">
         <div className="flex items-center gap-2.5 px-1.5">
-          <img src="/images/logo/stockpilot-icon.svg" alt="" className="w-[26px] h-[26px] rounded-[7px] flex-none" />
-          <span className="font-archivo font-bold text-[15px] tracking-tight">StockPilot</span>
+          <img src="/images/logo/pithos-icon.svg" alt="" className="w-[26px] h-[26px] rounded-[7px] flex-none" />
+          <span className="font-archivo font-bold text-[15px] tracking-tight">Pithos</span>
           {badge}
         </div>
 

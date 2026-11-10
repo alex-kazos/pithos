@@ -8,7 +8,14 @@ import {
   setStoreConnection,
   type StoreConnectionRecord,
 } from '../lib/stores';
-import { isValidAccessToken, normalizeShopDomain, storeIdFromShop, verifyAccessToken } from '../lib/shopifyOAuth';
+import {
+  ClientCredentialsError,
+  isValidAccessToken,
+  normalizeShopDomain,
+  requestClientCredentialsToken,
+  storeIdFromShop,
+  verifyAccessToken,
+} from '../lib/shopifyOAuth';
 import {
   isValidConsumerKey,
   isValidConsumerSecret,
@@ -37,8 +44,38 @@ storesRoutes.post('/', async c => {
   if (body.platform === 'shopify') {
     const rawShop = typeof body.shop === 'string' ? body.shop.trim() : '';
     const shop = normalizeShopDomain(rawShop.includes('.') ? rawShop : `${rawShop}.myshopify.com`);
-    const apiToken = typeof body.apiToken === 'string' ? body.apiToken.trim() : '';
     if (!shop) return c.json({ error: 'Enter a valid store URL, e.g. "your-store.myshopify.com"' }, 400);
+
+    // Dev Dashboard apps (created since 2026): exchange the client ID and
+    // secret for a 24-hour token now, which also proves they work.
+    if (body.clientId !== undefined || body.clientSecret !== undefined) {
+      const clientId = typeof body.clientId === 'string' ? body.clientId.trim() : '';
+      const clientSecret = typeof body.clientSecret === 'string' ? body.clientSecret.trim() : '';
+      const looksValid = (v: string) => v.length >= 10 && v.length <= 200 && !/\s/.test(v);
+      if (!looksValid(clientId) || !looksValid(clientSecret)) {
+        return c.json({ error: "Enter the app's client ID and client secret from the Shopify Dev Dashboard." }, 400);
+      }
+
+      try {
+        const token = await requestClientCredentialsToken(shop, clientId, clientSecret);
+        const store = await saveStore(uid, {
+          id: storeIdFromShop(shop),
+          platform: 'shopify',
+          url: shop,
+          credentials: { clientId, clientSecret, accessToken: token.accessToken, tokenExpiresAt: token.expiresAt },
+          authMethod: 'client_credentials',
+          scope: token.scope,
+        });
+        return c.json({ store }, 201);
+      } catch (error) {
+        if (error instanceof ClientCredentialsError) {
+          return c.json({ error: error.message }, error.reason === 'unreachable' ? 502 : 400);
+        }
+        throw error;
+      }
+    }
+
+    const apiToken = typeof body.apiToken === 'string' ? body.apiToken.trim() : '';
     if (!isValidAccessToken(apiToken)) {
       return c.json({ error: 'Enter a valid Admin API access token (starts with shpat_, shpca_, or shppa_)' }, 400);
     }

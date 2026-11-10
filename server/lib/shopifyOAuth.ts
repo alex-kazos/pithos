@@ -123,3 +123,65 @@ export async function verifyAccessToken(shop: string, token: string): Promise<'v
     return 'unreachable';
   }
 }
+
+export interface ClientCredentialsToken {
+  accessToken: string;
+  scope: string;
+  /** ISO time the token stops working (Shopify issues them for 24 hours). */
+  expiresAt: string;
+}
+
+/** Why Shopify refused a client ID + secret, phrased for the merchant. */
+export class ClientCredentialsError extends Error {
+  constructor(message: string, readonly reason: 'not_permitted' | 'rejected' | 'unreachable') {
+    super(message);
+  }
+}
+
+/**
+ * Custom apps created since 2026 live in Shopify's Dev Dashboard and never
+ * show an access token in the admin. Instead the app's client ID and secret
+ * are exchanged for a token (the "client credentials grant"). The token
+ * lasts 24 hours and there is no refresh token: just ask again.
+ * https://shopify.dev/docs/apps/build/authentication-authorization/access-tokens/client-credentials-grant
+ */
+export async function requestClientCredentialsToken(
+  shop: string,
+  clientId: string,
+  clientSecret: string
+): Promise<ClientCredentialsToken> {
+  let response: Response;
+  try {
+    response = await fetch(`https://${shop}/admin/oauth/access_token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ grant_type: 'client_credentials', client_id: clientId, client_secret: clientSecret }),
+    });
+  } catch {
+    throw new ClientCredentialsError(`Could not reach ${shop}. Check the store URL and try again.`, 'unreachable');
+  }
+
+  const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!response.ok || typeof body.access_token !== 'string') {
+    if (body.error === 'shop_not_permitted') {
+      throw new ClientCredentialsError(
+        'Shopify only gives tokens to apps in the same organization as the store. Create the app from the Dev Dashboard of the organization that owns this store, and install it on the store.',
+        'not_permitted'
+      );
+    }
+    if (response.status >= 500) {
+      throw new ClientCredentialsError(`Shopify is not responding right now (HTTP ${response.status}). Try again shortly.`, 'unreachable');
+    }
+    throw new ClientCredentialsError(
+      'Shopify rejected that client ID and secret. Check both values, and that the app is installed on this store.',
+      'rejected'
+    );
+  }
+
+  const expiresIn = typeof body.expires_in === 'number' ? body.expires_in : 86399;
+  return {
+    accessToken: body.access_token,
+    scope: typeof body.scope === 'string' ? body.scope : '',
+    expiresAt: new Date(Date.now() + expiresIn * 1000).toISOString(),
+  };
+}

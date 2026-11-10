@@ -36,7 +36,7 @@ interface AIAssistantContextType {
 
 const AIAssistantContext = createContext<AIAssistantContextType | undefined>(undefined);
 
-const STORAGE_PREFIX = 'stockpilot:chats:';
+const STORAGE_PREFIX = 'pithos:chats:';
 const MAX_SESSIONS = 30;
 
 function storageKey(storeName: string) {

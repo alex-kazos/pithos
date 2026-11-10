@@ -33,11 +33,11 @@ async function main() {
   }
 
   serve({ fetch: app.fetch, port }, info => {
-    console.log(`StockPilot listening on http://localhost:${info.port}`);
+    console.log(`Pithos listening on http://localhost:${info.port}`);
   });
 }
 
 main().catch(error => {
-  console.error('Failed to start StockPilot:', error);
+  console.error('Failed to start Pithos:', error);
   process.exit(1);
 });

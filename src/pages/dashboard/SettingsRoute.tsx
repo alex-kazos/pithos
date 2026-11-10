@@ -43,9 +43,9 @@ const NAV_GROUPS: { group: string; items: { id: SectionId; label: string }[] }[]
 ];
 
 const SECTION_COPY: Record<SectionId, [string, string]> = {
-  profile: ['Profile', 'Your name and the email StockPilot writes to.'],
+  profile: ['Profile', 'Your name and the email Pithos writes to.'],
   security: ['Sign-in & security', 'How you get into the account, and the extra lock on it.'],
-  notifications: ['Notifications', 'What StockPilot is allowed to send you, and where.'],
+  notifications: ['Notifications', 'What Pithos is allowed to send you, and where.'],
   appearance: ['Appearance & language', 'Dark by default, light for daytime floor screens.'],
   stores: ['Stores', 'Manage the stores connected to this account.'],
   dashboard: ['Dashboard layout', "Pick the preset that matches how this store is run. It applies to Overview for everyone on the account."],
@@ -737,7 +737,7 @@ function NotificationsSection({
       />
       <SettingsRow
         title="Push notifications"
-        description="Browser alerts while StockPilot is open"
+        description="Browser alerts while Pithos is open"
         control={<Toggle checked={preferences.notifyPush} onChange={v => setPreferences({ notifyPush: v })} />}
       />
       <SettingsRow
@@ -748,7 +748,7 @@ function NotificationsSection({
       <SettingsRow
         border={false}
         title="Marketing"
-        description="Occasional email about StockPilot itself"
+        description="Occasional email about Pithos itself"
         control={<Toggle checked={preferences.notifyMarketing} onChange={v => setPreferences({ notifyMarketing: v })} />}
       />
     </div>

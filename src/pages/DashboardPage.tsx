@@ -1,7 +1,7 @@
 /**
  * DashboardPage Component
  * 
- * Main dashboard interface for the StockPilot application that displays various
+ * Main dashboard interface for the Pithos application that displays various
  * analytics, inventory data, and AI-powered recommendations for store management.
  * Integrates with Shopify to fetch and display store data.
  */

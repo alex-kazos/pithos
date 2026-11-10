@@ -1,4 +1,4 @@
-# StockPilot: one image serving the frontend and the /api server.
+# Pithos: one image serving the frontend and the /api server.
 
 # --- build -------------------------------------------------------------------
 FROM node:22-alpine AS build

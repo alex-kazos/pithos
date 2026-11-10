@@ -1,4 +1,4 @@
-# `docker compose up -d` runs the whole app: Postgres + StockPilot on
+# `docker compose up -d` runs the whole app: Postgres + Pithos on
 # http://localhost:3000. Settings come from .env (copy .env.example).
 #
 # For local development run only the database (`npm run db:up`) and start
@@ -8,16 +8,16 @@ services:
     image: postgres:17-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: stockpilot
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-stockpilot}
-      POSTGRES_DB: stockpilot
+      POSTGRES_USER: pithos
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pithos}
+      POSTGRES_DB: pithos
     volumes:
       - db-data:/var/lib/postgresql/data
     ports:
       # Published on localhost only, for `npm run dev`.
       - "127.0.0.1:5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U stockpilot -d stockpilot"]
+      test: ["CMD-SHELL", "pg_isready -U pithos -d pithos"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -31,7 +31,7 @@ services:
     env_file: .env
     environment:
       # Inside Compose the database is reachable as "db", not localhost.
-      DATABASE_URL: postgres://stockpilot:${POSTGRES_PASSWORD:-stockpilot}@db:5432/stockpilot
+      DATABASE_URL: postgres://pithos:${POSTGRES_PASSWORD:-pithos}@db:5432/pithos
       PORT: "3000"
     ports:
       - "3000:3000"

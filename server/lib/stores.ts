@@ -3,8 +3,18 @@ import { decryptSecret, encryptSecret } from './crypto';
 
 export type StorePlatform = 'shopify' | 'woocommerce';
 
+/** A Shopify Dev Dashboard app: its token is fetched from these and lasts 24 hours. */
+export interface ShopifyClientCredentials {
+  clientId: string;
+  clientSecret: string;
+  /** Last token Shopify issued, cached until shortly before it expires. */
+  accessToken?: string;
+  tokenExpiresAt?: string;
+}
+
 export type StoreCredentials =
   | { apiToken: string }
+  | ShopifyClientCredentials
   | { consumerKey: string; consumerSecret: string };
 
 /** Health verdict the dashboard records after each sync (see src/services/storeHealthService.ts). */
@@ -147,6 +157,18 @@ export async function deleteStore(userId: string, storeId: string): Promise<bool
     }
     return true;
   });
+}
+
+/** Replaces a store's credentials without touching anything else (e.g. a refreshed Shopify token). */
+export async function updateStoreCredentials(
+  userId: string,
+  storeId: string,
+  credentials: StoreCredentials
+): Promise<void> {
+  await query(
+    'UPDATE stores SET credentials_encrypted = $3, updated_at = now() WHERE user_id = $1 AND id = $2',
+    [userId, storeId, encryptSecret(JSON.stringify(credentials))]
+  );
 }
 
 export async function setStoreConnection(

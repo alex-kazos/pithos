@@ -4,7 +4,11 @@ const verifyAuth = vi.fn();
 const getStore = vi.fn();
 
 vi.mock('../../lib/auth', () => ({ verifyAuth: (...args: unknown[]) => verifyAuth(...args) }));
-vi.mock('../../lib/stores', () => ({ getStore: (...args: unknown[]) => getStore(...args) }));
+const updateStoreCredentials = vi.fn();
+vi.mock('../../lib/stores', () => ({
+  getStore: (...args: unknown[]) => getStore(...args),
+  updateStoreCredentials: (...args: unknown[]) => updateStoreCredentials(...args),
+}));
 
 import { onRequest } from './proxy';
 
@@ -84,6 +88,39 @@ describe('Shopify proxy', () => {
     expect(response.status).toBe(400);
     expect(body.error).toBe('Invalid Shopify store domain');
     expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('renews an expired client-credentials token before calling Shopify', async () => {
+    verifyAuth.mockResolvedValueOnce({ uid: 'real-user', email: null });
+    getStore.mockResolvedValueOnce({
+      ...shopifyStore('my-store.myshopify.com'),
+      credentials: { clientId: 'client-id-123', clientSecret: 'client-secret-123', accessToken: 'stale', tokenExpiresAt: new Date(Date.now() - 1000).toISOString() },
+    });
+    (global.fetch as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ access_token: 'renewed', scope: 'read_products', expires_in: 86399 }) })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ products: [] }) });
+
+    const response = await onRequest({ request: proxyRequest() });
+
+    expect(response.status).toBe(200);
+    const calls = (global.fetch as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls[0][0]).toBe('https://my-store.myshopify.com/admin/oauth/access_token');
+    expect(calls[1][1].headers['X-Shopify-Access-Token']).toBe('renewed');
+    expect(updateStoreCredentials).toHaveBeenCalled();
+  });
+
+  it('reports a refused token renewal as an auth problem so the store shows "reconnect"', async () => {
+    verifyAuth.mockResolvedValueOnce({ uid: 'real-user', email: null });
+    getStore.mockResolvedValueOnce({
+      ...shopifyStore('my-store.myshopify.com'),
+      credentials: { clientId: 'client-id-123', clientSecret: 'rotated-away' },
+    });
+    (global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ok: false, status: 401, json: async () => ({ error: 'invalid_client' }) });
+
+    const response = await onRequest({ request: proxyRequest() });
+
+    expect(response.status).toBe(401);
+    expect((await response.json()).upstreamStatus).toBe(401);
   });
 
   it("passes Shopify's own error status through so the dashboard can classify it", async () => {

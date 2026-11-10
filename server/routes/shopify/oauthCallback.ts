@@ -16,7 +16,7 @@ function redirectTo(status: 'connected' | 'error', detail?: string, onboarding?:
  * (or decline) installation - so every safeguard here matters: HMAC
  * verification proves the request came from Shopify, and the one-time
  * `state` (written by oauthStart.ts, scoped to one user + shop) is what ties
- * this callback back to the StockPilot user who initiated it. Without both,
+ * this callback back to the Pithos user who initiated it. Without both,
  * this endpoint would let anyone attach an arbitrary Shopify access token to
  * an arbitrary account.
  */

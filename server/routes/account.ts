@@ -4,7 +4,7 @@ import { withTransaction } from '../lib/db';
 
 /**
  * Danger-zone account operations. Deleting the account removes the login
- * itself plus everything that belongs to it: every table StockPilot owns
+ * itself plus everything that belongs to it: every table Pithos owns
  * references "user" with ON DELETE CASCADE (see lib/migrations.ts).
  */
 export async function onRequest(context: { request: Request }) {

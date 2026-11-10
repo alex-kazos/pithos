@@ -3,7 +3,7 @@
  * switches a feature off rather than breaking the app when it's missing.
  */
 
-/** Public URL users reach the app on, e.g. https://stockpilot.example.com. */
+/** Public URL users reach the app on, e.g. https://pithos.example.com. */
 export function appUrl(): string {
   return (process.env.APP_URL || 'http://localhost:3000').replace(/\/+$/, '');
 }

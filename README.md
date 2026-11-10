@@ -1,16 +1,14 @@
-# StockPilot AI 🚀
+<p align="center"><img src="public/images/logo/pithos-icon.svg" width="96" alt="" /></p>
 
-StockPilot AI is an open-source inventory analytics dashboard for **Shopify** and **WooCommerce** stores. It pulls your products and orders, flags stockouts and dead stock, forecasts demand, and uses an LLM to write restock recommendations and answer questions about your store data.
+# Pithos
 
-![img.png](img.png)
-<p align="center"><i>Dashboard Preview</i></p>
+Pithos is an open-source inventory analytics dashboard for **Shopify** and **WooCommerce** stores. It pulls your products and orders, flags stockouts and dead stock, forecasts demand, and uses an LLM to write restock recommendations and answer questions about your store data.
+
+**[Try the live demo →](https://pithos.alexkazos.com)** (sample data, nothing to sign up for)
+
+![The Pithos dashboard](img.png)
 
 > **Self-hosted and fully open source.** One `docker compose up` runs the whole thing on your own machine or server: a Node API, a Postgres database and open-source login ([Better Auth](https://www.better-auth.com)). No cloud accounts are needed, and every user brings their **own OpenAI API key**, added in Settings.
-
-The repository holds two separate projects:
-
-- **The app** (repository root): sign-in, the dashboard, the public demo and the `/api` server. This is all you need to run StockPilot for your own stores.
-- **The marketing site** ([`landing/`](landing/)): the landing page, blog and legal pages of the original stockpilotai.com. It's optional and has its own `package.json`. If you're self-hosting, you can ignore it or delete the folder.
 
 ## Features 🌟
 
@@ -30,7 +28,6 @@ The repository holds two separate projects:
 | Login | [Better Auth](https://www.better-auth.com): email/password, optional Google | `server/lib/auth.ts` |
 | Database | PostgreSQL (schema migrates itself on startup) | `server/lib/migrations.ts` |
 | AI | OpenAI Chat Completions with each user's own key, or any OpenAI-compatible endpoint | `server/lib/openai.ts` |
-| Marketing site (optional) | Landing page, blog, legal pages - static React + Tailwind | `landing/` |
 
 The browser only ever talks to the app's own `/api`, using an HTTP-only session cookie. Secrets stay on the server: store credentials (Shopify tokens, WooCommerce keys) and each user's OpenAI key are **encrypted at rest** (AES-256-GCM) and never sent back to the browser.
 
@@ -39,8 +36,8 @@ The browser only ever talks to the app's own `/api`, using an HTTP-only session 
 You need [Docker](https://docs.docker.com/get-docker/) with Compose.
 
 ```bash
-git clone https://github.com/alex-kazos/stockpilot-open.git
-cd stockpilot-open
+git clone https://github.com/alex-kazos/pithos.git
+cd pithos
 cp .env.example .env
 ```
 
@@ -52,7 +49,7 @@ docker compose up -d
 
 Open http://localhost:3000, create an account, connect a store, and add your OpenAI API key under **Settings → AI & API key**.
 
-To run it on a real domain, put it behind your usual reverse proxy (Caddy, nginx, Traefik, ...) and set `APP_URL` to the public URL, e.g. `https://stockpilot.example.com`. Data lives in the `db-data` Docker volume.
+To run it on a real domain, put it behind your usual reverse proxy (Caddy, nginx, Traefik, ...) and set `APP_URL` to the public URL, e.g. `https://pithos.example.com`. Data lives in the `db-data` Docker volume.
 
 ## Configuration 🔐
 
@@ -82,7 +79,8 @@ Users connect stores from the dashboard after signing in.
 - *Manual*: in WordPress go to **WooCommerce → Settings → Advanced → REST API**, create a key with **Read** permission, and paste the consumer key and secret.
 
 **Shopify: pick one.**
-- *Access token (simplest, for your own store)*: create a custom app for your store with the `read_products` and `read_orders` Admin API scopes (`read_customers` is optional), install it, and paste its Admin API access token in the connect screen. No server configuration needed. See Shopify's docs on [custom apps](https://help.shopify.com/en/manual/apps/app-types/custom-apps).
+- *Custom app (simplest, for your own store)*: in the [Shopify Dev Dashboard](https://help.shopify.com/en/manual/apps/install-setup-apps#create-and-install-a-custom-app), create an app with the `read_products` and `read_orders` Admin API scopes (`read_customers` is optional), release a version and install it on your store. Then paste its **client ID and client secret** in the connect screen. Pithos exchanges them for an access token and renews it every 24 hours ([Shopify's client credentials grant](https://shopify.dev/docs/apps/build/authentication-authorization/access-tokens/client-credentials-grant)). The app must belong to the same Shopify organization as the store. No server configuration needed.
+- *Access token (custom apps created before 2026)*: older custom apps made in the Shopify admin can still [reveal an Admin API access token](https://help.shopify.com/en/manual/apps/install-setup-apps#get-access-token-legacy) (starts with `shpat_`) once. Paste it in the connect screen under **Access token**.
 - *One-click OAuth*: create your **own** app in the [Shopify Partner Dashboard](https://partners.shopify.com), add `{APP_URL}/api/shopify/oauth/callback` to its allowed redirection URLs, and set `SHOPIFY_API_KEY` and `SHOPIFY_API_SECRET`. An app with *custom distribution* can only be installed on the store or organization you pick when you create the install link. To let any merchant connect, the app needs *public* distribution, which means going through Shopify's app review.
 
 Pasted tokens and keys are checked against the store before they're saved.
@@ -111,30 +109,14 @@ npm start                 # Run the production build (serves dist/ too)
 `server/integration.test.ts` runs the real app against a real Postgres. It's skipped unless `TEST_DATABASE_URL` points at a **disposable** database (it drops every table first), e.g.:
 
 ```bash
-docker compose exec db createdb -U stockpilot stockpilot_test
-TEST_DATABASE_URL=postgres://stockpilot:stockpilot@localhost:5432/stockpilot_test npm test
+docker compose exec db createdb -U pithos pithos_test
+TEST_DATABASE_URL=postgres://pithos:pithos@localhost:5432/pithos_test npm test
 ```
-
-## Marketing site (optional) 🌐
-
-[`landing/`](landing/) is the public website that sits in front of the app: landing page, blog, Privacy Policy and Terms. It's a static Vite + React + Tailwind site with no backend, and it links to the app through `VITE_APP_URL`.
-
-```bash
-cd landing
-cp .env.example .env   # VITE_APP_URL=http://localhost:5173
-npm install
-npm run dev            # http://localhost:5174
-```
-
-Deploy its `dist/` to any static host (root directory `landing`, build command `npm run build`, output `dist`), with `VITE_APP_URL` set to the app's URL.
-
-Everything in it describes the original stockpilotai.com and its operator: the copy, `index.html` meta tags, `public/sitemap.xml`, the legal text and contact email in `src/data/legalContent.ts`, and the author links in `src/components/Footer.tsx`. Replace them before publishing your own.
 
 ## Project structure 📁
 
 ```
-stockpilot-open/
-├── landing/                  # Optional marketing site (separate project - see above)
+pithos/
 ├── server/                   # The API server (Node + Hono)
 │   ├── index.ts              # Entry: runs migrations, serves /api and the built frontend
 │   ├── app.ts                # Routes

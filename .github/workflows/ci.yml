@@ -19,18 +19,18 @@ jobs:
       postgres:
         image: postgres:17-alpine
         env:
-          POSTGRES_USER: stockpilot
-          POSTGRES_PASSWORD: stockpilot
-          POSTGRES_DB: stockpilot_test
+          POSTGRES_USER: pithos
+          POSTGRES_PASSWORD: pithos
+          POSTGRES_DB: pithos_test
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U stockpilot -d stockpilot_test"
+          --health-cmd "pg_isready -U pithos -d pithos_test"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
     env:
-      TEST_DATABASE_URL: postgres://stockpilot:stockpilot@localhost:5432/stockpilot_test
+      TEST_DATABASE_URL: postgres://pithos:pithos@localhost:5432/pithos_test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -70,24 +70,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: docker build -t stockpilot:ci .
-
-  landing:
-    name: Landing page - typecheck, build, test (blocking)
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: landing
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: landing/package-lock.json
-      - run: npm ci
-      - run: npm run build
-      - run: npm test
+      - run: docker build -t pithos:ci .
 
   lint:
     name: Lint (informational - repo has pre-existing debt)

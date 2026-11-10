@@ -62,8 +62,8 @@ export function AssistantSidebar() {
         <button
           type="button"
           onClick={toggleAssistant}
-          title="Open StockPilot AI"
-          aria-label="Open StockPilot AI"
+          title="Open Ask Pithos"
+          aria-label="Open Ask Pithos"
           className="w-8 h-8 rounded-lg bg-accent/[0.14] text-accent-soft hover:bg-accent/25 flex items-center justify-center"
         >
           <Brain className="w-4 h-4" />
@@ -78,7 +78,7 @@ export function AssistantSidebar() {
         <div className="flex items-center gap-2 min-w-0">
           <Brain className="w-[18px] h-[18px] text-accent flex-none" />
           <div className="min-w-0">
-            <div className="font-semibold text-[13.5px] text-white leading-tight">StockPilot AI</div>
+            <div className="font-semibold text-[13.5px] text-white leading-tight">Ask Pithos</div>
             <div className="text-[11px] text-white/40 truncate">
               {showHistory ? `${sessions.length} conversation${sessions.length === 1 ? '' : 's'}` : 'Your inventory expert'}
             </div>

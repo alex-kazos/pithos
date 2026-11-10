@@ -9,7 +9,7 @@ import { isShopifyOAuthConfigured, publicUrl } from '../../lib/config';
  * so it runs with the user's session - the returned authorize URL is then
  * navigated to directly. The user id is stashed server-side against the
  * one-time `state` value so the callback (which Shopify hits directly)
- * knows which StockPilot user to attach the store to.
+ * knows which Pithos user to attach the store to.
  */
 export async function onRequest(context: { request: Request }) {
   const { request } = context;
@@ -25,7 +25,7 @@ export async function onRequest(context: { request: Request }) {
 
   if (!isShopifyOAuthConfigured()) {
     return jsonResponse(
-      { error: 'One-click Shopify connect is not set up on this server. Use the Advanced tab to paste an access token.' },
+      { error: 'One-click Shopify connect is not set up on this server. Paste an Admin API access token instead.' },
       503
     );
   }

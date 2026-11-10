@@ -1,4 +1,0 @@
-User-agent: *
-Allow: /
-
-Sitemap: https://stockpilotai.com/sitemap.xml

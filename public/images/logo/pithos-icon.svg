@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <clipPath id="squircle">
+      <rect x="0" y="0" width="1024" height="1024" rx="230.4" ry="230.4"></rect>
+    </clipPath>
+    <clipPath id="jar">
+      <path d="M37 25 C37 31 19 35 19 51 C19 68 30 79 40 85 L60 85 C70 79 81 68 81 51 C81 35 63 31 63 25 Z"></path>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#squircle)">
+    <rect x="0" y="0" width="1024" height="1024" fill="#0e0d14"></rect>
+    <g transform="scale(10.24)">
+      <!-- Body of the pithos -->
+      <path d="M37 25 C37 31 19 35 19 51 C19 68 30 79 40 85 L60 85 C70 79 81 68 81 51 C81 35 63 31 63 25 Z" fill="#6b7aff"></path>
+      <!-- Painted bands, kept inside the body -->
+      <g clip-path="url(#jar)">
+        <rect x="0" y="44" width="100" height="4" fill="#0e0d14" opacity="0.55"></rect>
+        <rect x="0" y="56" width="100" height="7" fill="#c3c9ff"></rect>
+        <rect x="0" y="69" width="100" height="3" fill="#0e0d14" opacity="0.55"></rect>
+      </g>
+      <!-- Rim and foot -->
+      <rect x="31" y="16" width="38" height="10" rx="5" fill="#c3c9ff"></rect>
+      <rect x="38" y="83" width="24" height="6" rx="3" fill="#4b4bc8"></rect>
+    </g>
+  </g>
+</svg>

@@ -11,7 +11,7 @@ describe('buildAuthorizeUrl', () => {
     ));
 
     expect(url.origin + url.pathname).toBe('https://my-shop.example.com/wc-auth/v1/authorize');
-    expect(url.searchParams.get('app_name')).toBe('StockPilot');
+    expect(url.searchParams.get('app_name')).toBe('Pithos');
     expect(url.searchParams.get('scope')).toBe('read');
     expect(url.searchParams.get('user_id')).toBe('nonce-123');
     expect(url.searchParams.get('return_url')).toBe('https://app.example.com/dashboard');

@@ -1,7 +1,7 @@
 /**
  * Main Application Component
  * 
- * Provides the core routing and authentication structure for the StockPilot application.
+ * Provides the core routing and authentication structure for the Pithos application.
  * Implements protected routes and lazy loading for better performance.
  */
 
@@ -12,8 +12,8 @@ import { PrivateRoute } from './components/routing/PrivateRoute';
 import { LoadingSpinner } from './components/shared/LoadingSpinner';
 import { ROUTES } from './constants/routes';
 
-// The marketing site (landing page, blog, legal pages) is a separate project
-// in landing/ - this app is only the auth flow, dashboard and public demo.
+// The app is only the auth flow, dashboard and public demo - there is no
+// marketing site in this repository.
 // Each page is its own lazy chunk, so signing in doesn't download the whole
 // dashboard and the demo doesn't download the auth flow.
 const AuthPage = lazy(() => import('./pages/AuthPage').then(m => ({ default: m.AuthPage })));

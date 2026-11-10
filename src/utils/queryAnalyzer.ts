@@ -245,7 +245,7 @@ export function filterProductsByQueryContext(
  * Generates a human-readable context description for relevant products.
  */
 export function generateContextDescription(context: QueryContext, products: DashboardProduct[]): string {
-  let description = `You are StockPilot AI, an inventory assistant for Shopify store owners.\n\n`;
+  let description = `You are Pithos, an inventory assistant for Shopify store owners.\n\n`;
   
   // Add query-specific context
   switch (context.type) {

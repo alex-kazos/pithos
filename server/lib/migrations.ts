@@ -3,7 +3,7 @@ import { authOptions } from './auth';
 import { getPool } from './db';
 
 /**
- * Schema for StockPilot's own data. Better Auth creates and migrates its
+ * Schema for Pithos's own data. Better Auth creates and migrates its
  * tables ("user", "session", "account", "verification") itself; everything
  * here hangs off "user" and is removed with it (ON DELETE CASCADE).
  *

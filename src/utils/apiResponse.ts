@@ -1,5 +1,5 @@
 /**
- * Reads a JSON body from one of StockPilot's own /api routes.
+ * Reads a JSON body from one of the app's own /api routes.
  *
  * `response.json()` throws "Unexpected end of JSON input" (or "Unexpected
  * token '<'") when a route answers with an empty body or an HTML error page
@@ -12,13 +12,13 @@ export async function readJsonResponse<T = Record<string, unknown>>(response: Re
   const text = await response.text();
 
   if (!text.trim()) {
-    throw new Error(`StockPilot's API returned an empty response (HTTP ${response.status}).`);
+    throw new Error(`The Pithos API returned an empty response (HTTP ${response.status}).`);
   }
 
   try {
     return JSON.parse(text) as T;
   } catch {
-    throw new Error(`StockPilot's API returned an unexpected response (HTTP ${response.status}).`);
+    throw new Error(`The Pithos API returned an unexpected response (HTTP ${response.status}).`);
   }
 }
 

@@ -6,7 +6,7 @@
  * stubbed.
  *
  * Runs when TEST_DATABASE_URL points at a disposable database (CI sets it;
- * locally: `npm run db:up`, create a stockpilot_test database, then set it).
+ * locally: `npm run db:up`, create a pithos_test database, then set it).
  * Every table in that database is dropped first.
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
