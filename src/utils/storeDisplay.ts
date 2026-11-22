@@ -1,11 +1,13 @@
 export const ALL_STORES_ID = '__all__';
 export const ALL_SHOPIFY_ID = '__all_shopify__';
 export const ALL_WOOCOMMERCE_ID = '__all_woocommerce__';
+export const ALL_DATABASE_ID = '__all_database__';
 
 /** Maps a real store's platform to the sentinel id for "all stores on this platform". */
 export function allStoresIdForPlatform(platform: string): string {
   if (platform === 'shopify') return ALL_SHOPIFY_ID;
   if (platform === 'woocommerce') return ALL_WOOCOMMERCE_ID;
+  if (platform === 'database') return ALL_DATABASE_ID;
   return ALL_STORES_ID;
 }
 
@@ -13,6 +15,7 @@ const LAYOUT_DOC_ID_OVERRIDES: Record<string, string> = {
   [ALL_STORES_ID]: 'all-stores',
   [ALL_SHOPIFY_ID]: 'all-shopify',
   [ALL_WOOCOMMERCE_ID]: 'all-woocommerce',
+  [ALL_DATABASE_ID]: 'all-databases',
 };
 
 /**
@@ -35,6 +38,9 @@ export function toLayoutDocId(storeId: string): string {
  */
 export function getStoreDisplayName(rawName: string): string {
   if (!rawName) return 'Unnamed store';
+  // A name the user typed (custom databases, e.g. "shop on db.example.com")
+  // is already human-friendly - URLs and hostnames never contain spaces.
+  if (/\s/.test(rawName.trim())) return rawName.trim();
 
   const withoutProtocol = rawName.replace(/^https?:\/\//i, '');
   const hostname = withoutProtocol.split('/')[0];

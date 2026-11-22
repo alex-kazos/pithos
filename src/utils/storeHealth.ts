@@ -13,7 +13,7 @@
  * merchant can act on: which store, why, and what to do about it.
  */
 
-export type StorePlatform = 'shopify' | 'woocommerce';
+export type StorePlatform = 'shopify' | 'woocommerce' | 'database';
 
 export type StoreIssueReason =
   | 'auth'         // credentials rejected - app uninstalled or keys revoked/rotated
@@ -21,6 +21,7 @@ export type StoreIssueReason =
   | 'unreachable'  // DNS/timeout/5xx - offline, deleted, or temporarily down
   | 'rate_limited' // platform throttling us - transient by definition
   | 'api_error'    // our own /api proxy never answered - says nothing about the store
+  | 'query_error'  // a custom database answered, but its SQL query failed or lacks columns
   | 'unknown';
 
 export interface StoreConnectionIssue {
@@ -73,6 +74,11 @@ export const STORE_ISSUE_COPY: Record<StoreIssueReason, IssueCopy> = {
     label: 'Sync unavailable',
     description: 'Pithos could not reach its own sync service, so this store was never contacted. Nothing is wrong with your store.',
     suggestedAction: 'retry',
+  },
+  query_error: {
+    label: 'Query failed',
+    description: 'The database is reachable, but one of its SQL queries failed. Edit the connection to fix the query.',
+    suggestedAction: 'reconnect',
   },
   unknown: {
     label: 'Not syncing',
@@ -172,7 +178,12 @@ export function classifyStoreError(error: unknown): { reason: StoreIssueReason; 
 }
 
 export function toStoreIssue(storeId: string, platform: StorePlatform, error: unknown): StoreConnectionIssue {
-  return { storeId, platform, ...classifyStoreError(error) };
+  const classified = classifyStoreError(error);
+  // The database route answers 422 when the merchant's own SQL is at fault.
+  if (platform === 'database' && classified.status === 422 && classified.reason !== 'api_error') {
+    return { storeId, platform, ...classified, reason: 'query_error' };
+  }
+  return { storeId, platform, ...classified };
 }
 
 /**

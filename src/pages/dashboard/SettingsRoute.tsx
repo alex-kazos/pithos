@@ -168,7 +168,7 @@ function StoresSection({ onCountChange }: { onCountChange: (count: number) => vo
     try {
       const rows: StoreRow[] = (await listStores()).map(store => ({
         id: store.id,
-        name: getStoreDisplayName(store.url),
+        name: getStoreDisplayName(store.label ?? store.url),
         type: store.platform,
         isActive: store.isActive,
       }));

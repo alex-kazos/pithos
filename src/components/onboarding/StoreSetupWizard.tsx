@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Check } from 'lucide-react';
 import { ShopifySetup } from '../integrations/ShopifySetup';
 import { WooCommerceSetup } from '../integrations/WooCommerceSetup';
+import { DatabaseSetup } from '../integrations/DatabaseSetup';
 
 const STEPS = [
   { n: 1, label: 'Account' },
@@ -9,11 +10,11 @@ const STEPS = [
 ];
 
 export function StoreSetupWizard() {
-  const [platform, setPlatform] = useState<'shopify' | 'woocommerce'>('shopify');
+  const [platform, setPlatform] = useState<'shopify' | 'woocommerce' | 'database'>('shopify');
 
   return (
     <div className="min-h-screen bg-canvas flex items-center justify-center p-6 font-archivo">
-      <div className="w-full max-w-[420px] p-8 sm:p-10 rounded-2xl bg-canvas-2 border border-white/[0.07] text-white">
+      <div className={`w-full ${platform === 'database' ? 'max-w-[560px]' : 'max-w-[420px]'} p-8 sm:p-10 rounded-2xl bg-canvas-2 border border-white/[0.07] text-white`}>
         <div className="flex justify-center gap-2">
           {STEPS.map(s => (
             <div key={s.n} className="flex items-center gap-1.5">
@@ -48,15 +49,28 @@ export function StoreSetupWizard() {
               onClose={() => {}}
               onSwitchPlatform={() => setPlatform('woocommerce')}
             />
-          ) : (
+          ) : platform === 'woocommerce' ? (
             <WooCommerceSetup
               standalone
               isOnboarding
               onClose={() => {}}
               onSwitchPlatform={() => setPlatform('shopify')}
             />
+          ) : (
+            <DatabaseSetup standalone isOnboarding onClose={() => {}} onSwitchPlatform={() => setPlatform('shopify')} />
           )}
         </div>
+
+        {platform !== 'database' && (
+          <button
+            type="button"
+            onClick={() => setPlatform('database')}
+            className="mt-3 w-full flex items-center justify-between px-3.5 py-3 rounded-[10px] border border-white/10 text-white text-[12.5px] font-medium hover:border-accent/50 transition-colors"
+          >
+            <span>Use your own database (PostgreSQL, MySQL, MariaDB)</span>
+            <span className="text-white/40">→</span>
+          </button>
+        )}
       </div>
     </div>
   );

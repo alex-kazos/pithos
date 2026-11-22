@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { AlertTriangle, ChevronDown, Settings2, Store, LayoutGrid, ShoppingBag } from 'lucide-react';
+import { AlertTriangle, ChevronDown, Settings2, Store, LayoutGrid, ShoppingBag, Database } from 'lucide-react';
 import { getStoreDisplayName, ALL_STORES_ID, allStoresIdForPlatform } from '../../utils/storeDisplay';
 
 interface StoreOption {
   id: string;
   name: string;
-  type: 'shopify' | 'woocommerce' | 'square' | 'all' | 'all_shopify' | 'all_woocommerce';
+  type: 'shopify' | 'woocommerce' | 'database' | 'square' | 'all' | 'all_shopify' | 'all_woocommerce' | 'all_database';
 }
 
 interface StoreSelectorProps {
@@ -23,15 +23,18 @@ interface StoreSelectorProps {
 const STORE_ICONS: Record<StoreOption['type'], typeof Store> = {
   shopify: Store,
   woocommerce: ShoppingBag,
+  database: Database,
   square: Store,
   all: LayoutGrid,
   all_shopify: LayoutGrid,
   all_woocommerce: LayoutGrid,
+  all_database: LayoutGrid,
 };
 
 const PLATFORM_LABELS: Record<string, string> = {
   shopify: 'Shopify',
   woocommerce: 'WooCommerce',
+  database: 'Databases',
   square: 'Square',
 };
 

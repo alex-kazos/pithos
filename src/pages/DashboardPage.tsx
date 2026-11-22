@@ -26,7 +26,7 @@ import SettingsRoute from './dashboard/SettingsRoute';
 import { AIAssistantProvider } from '../contexts/AIAssistantContext';
 import { mergeProductsBySku, transformForRecommendations } from '../utils/productMerger';
 import { Toast } from '../components/ui/Toast';
-import { ALL_STORES_ID, ALL_SHOPIFY_ID, ALL_WOOCOMMERCE_ID, getStoreDisplayName } from '../utils/storeDisplay';
+import { ALL_STORES_ID, ALL_SHOPIFY_ID, ALL_WOOCOMMERCE_ID, ALL_DATABASE_ID, getStoreDisplayName } from '../utils/storeDisplay';
 import { readConnectionRecord, recordStoreHealth, seedConnectionRecord } from '../services/storeHealthService';
 import { fetchCachedRecommendations, type CachedRecommendations } from '../utils/openai';
 import { activateStore, listStores } from '../services/api';
@@ -35,13 +35,14 @@ import { activateStore, listStores } from '../services/api';
 interface Store {
   id: string;
   name: string;
-  type: 'shopify' | 'woocommerce' | 'square' | 'all' | 'all_shopify' | 'all_woocommerce';
+  type: 'shopify' | 'woocommerce' | 'database' | 'square' | 'all' | 'all_shopify' | 'all_woocommerce' | 'all_database';
   isActive?: boolean;
 }
 
 const ALL_STORES_ENTRY: Store = { id: ALL_STORES_ID, name: 'All Stores', type: 'all' };
 const ALL_SHOPIFY_ENTRY: Store = { id: ALL_SHOPIFY_ID, name: 'All Shopify', type: 'all_shopify' };
 const ALL_WOOCOMMERCE_ENTRY: Store = { id: ALL_WOOCOMMERCE_ID, name: 'All WooCommerce', type: 'all_woocommerce' };
+const ALL_DATABASE_ENTRY: Store = { id: ALL_DATABASE_ID, name: 'All Databases', type: 'all_database' };
 
 export const DashboardPage: React.FC = () => {
   const { user } = useAuth();
@@ -103,7 +104,9 @@ export const DashboardPage: React.FC = () => {
   const isAllStoresView = currentStore?.type === 'all';
   const isAllShopifyView = currentStore?.type === 'all_shopify';
   const isAllWooCommerceView = currentStore?.type === 'all_woocommerce';
-  const isConnectedStoreView = currentStore?.type === 'shopify' || currentStore?.type === 'woocommerce';
+  const isAllDatabaseView = currentStore?.type === 'all_database';
+  const isConnectedStoreView =
+    currentStore?.type === 'shopify' || currentStore?.type === 'woocommerce' || currentStore?.type === 'database';
 
   // Every view resolves to an explicit list of stores to read - a single
   // store is just a one-element list. Nothing is fetched via Firestore's
@@ -111,10 +114,11 @@ export const DashboardPage: React.FC = () => {
   const storesForFetch = useMemo<StoreRef[]>(() => {
     if (isAllShopifyView) return stores.filter(s => s.type === 'shopify').map(s => ({ id: s.id, platform: 'shopify' as StorePlatform }));
     if (isAllWooCommerceView) return stores.filter(s => s.type === 'woocommerce').map(s => ({ id: s.id, platform: 'woocommerce' as StorePlatform }));
+    if (isAllDatabaseView) return stores.filter(s => s.type === 'database').map(s => ({ id: s.id, platform: 'database' as StorePlatform }));
     if (isAllStoresView) return stores.map(s => ({ id: s.id, platform: s.type as StorePlatform }));
     if (isConnectedStoreView && currentStore) return [{ id: currentStore.id, platform: currentStore.type as StorePlatform }];
     return [];
-  }, [stores, currentStore, isAllStoresView, isAllShopifyView, isAllWooCommerceView, isConnectedStoreView]);
+  }, [stores, currentStore, isAllStoresView, isAllShopifyView, isAllWooCommerceView, isAllDatabaseView, isConnectedStoreView]);
 
   // Store credentials and data loading (Shopify and/or WooCommerce, depending on what's connected)
   const {
@@ -138,6 +142,10 @@ export const DashboardPage: React.FC = () => {
     }
     if (storeId === ALL_WOOCOMMERCE_ID) {
       setCurrentStore(ALL_WOOCOMMERCE_ENTRY);
+      return;
+    }
+    if (storeId === ALL_DATABASE_ID) {
+      setCurrentStore(ALL_DATABASE_ENTRY);
       return;
     }
 
@@ -178,7 +186,7 @@ export const DashboardPage: React.FC = () => {
           seedConnectionRecord(user.uid, store.id, readConnectionRecord(store.connection));
           return {
             id: store.id,
-            name: store.url,
+            name: store.label ?? store.url,
             type: store.platform,
             isActive: store.isActive
           };

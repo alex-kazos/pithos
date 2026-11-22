@@ -29,8 +29,36 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      # Real MySQL and MariaDB for the own-database connector
+      # (server/lib/customDatabase.mysql.test.ts, skipped without the URLs).
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: pithos
+          MYSQL_DATABASE: pithos_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -ppithos"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: pithos
+          MARIADB_DATABASE: pithos_test
+        ports:
+          - 3307:3306
+        options: >-
+          --health-cmd "healthcheck.sh --connect --innodb_initialized"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     env:
       TEST_DATABASE_URL: postgres://pithos:pithos@localhost:5432/pithos_test
+      TEST_MYSQL_URL: mysql://root:pithos@127.0.0.1:3306/pithos_test?ssl-mode=REQUIRED
+      TEST_MARIADB_URL: mariadb://root:pithos@127.0.0.1:3307/pithos_test?ssl-mode=DISABLED
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

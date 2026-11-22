@@ -67,6 +67,7 @@ All settings go in `.env` (template: [`.env.example`](.env.example)).
 | `OPENAI_RECOMMENDATIONS_MODEL` | no | Model for recommendations, must support JSON mode (default `gpt-5.6-terra`) |
 | `OPENAI_BASE_URL` | no | Any OpenAI-compatible endpoint: Azure OpenAI, OpenRouter, a local server, ... |
 | `PORT` | no | Port the server listens on (default `3000`) |
+| `ALLOW_PRIVATE_DATABASE_HOSTS` | no | `true` lets users connect databases on private/local addresses (see below). Off by default |
 
 There is no server-wide OpenAI key: AI features use the signed-in user's own key, so each user pays for their own usage. Without a saved key, the dashboard works and the AI features ask the user to add one.
 
@@ -84,6 +85,44 @@ Users connect stores from the dashboard after signing in.
 - *One-click OAuth*: create your **own** app in the [Shopify Partner Dashboard](https://partners.shopify.com), add `{APP_URL}/api/shopify/oauth/callback` to its allowed redirection URLs, and set `SHOPIFY_API_KEY` and `SHOPIFY_API_SECRET`. An app with *custom distribution* can only be installed on the store or organization you pick when you create the install link. To let any merchant connect, the app needs *public* distribution, which means going through Shopify's app review.
 
 Pasted tokens and keys are checked against the store before they're saved.
+
+**Your own database (PostgreSQL, MySQL, MariaDB).**
+Not on Shopify or WooCommerce? Connect the database your shop already runs on and give Pithos two SQL queries; their column names (use `AS` to rename) are all it needs:
+
+| Query | One row per | Required columns | Optional columns |
+| --- | --- | --- | --- |
+| Products | product | `id`, `title`, `inventory_quantity` | `sku`, `price`, `product_type`, `created_at`, `updated_at` |
+| Orders | order line item | `order_id`, `created_at`, `product_id`, `quantity` | `price` (unit price), `total_price`, `line_item_id` |
+
+`product_id` must match the products query's `id` (integers, UUIDs or text codes all work). For example:
+
+```sql
+-- Products
+SELECT id, name AS title, sku, price, stock AS inventory_quantity, category AS product_type FROM products
+
+-- Orders (PostgreSQL; on MySQL/MariaDB write NOW() - INTERVAL 1 YEAR)
+SELECT o.id AS order_id, o.created_at, i.product_id, i.quantity, i.unit_price AS price
+FROM orders o JOIN order_items i ON i.order_id = o.id
+WHERE o.created_at >= now() - interval '1 year'
+```
+
+Connect with a connection string (`postgres://…`, `mysql://…` or `mariadb://…`; SSL is set with `?sslmode=` or MySQL's `?ssl-mode=`) or with host and credentials.
+
+Both queries are run once before the connection is saved. They always run in a read-only transaction with a 30-second timeout, one statement at a time, and may return at most 100,000 rows each. Even so, connect with a user that can only `SELECT` the tables you need:
+
+```sql
+-- PostgreSQL
+CREATE ROLE pithos_readonly LOGIN PASSWORD '...';
+GRANT SELECT ON products, orders, order_items TO pithos_readonly;
+
+-- MySQL / MariaDB
+CREATE USER 'pithos_readonly'@'%' IDENTIFIED BY '...';
+GRANT SELECT ON shop.products TO 'pithos_readonly'@'%';  -- repeat for orders, order_items
+```
+
+On MySQL and MariaDB, `DATETIME` values are read as UTC. The server-side timeout needs MySQL 5.7.8+ or MariaDB 10.1+; older versions still connect, but a slow query is then only cut off by Pithos's own timeout.
+
+Connection details are encrypted at rest like other store credentials, and the password is never sent back to the browser. To protect the network Pithos runs on, it only connects to databases with public addresses. On a self-hosted deployment where the database is on the same machine or LAN, set `ALLOW_PRIVATE_DATABASE_HOSTS=true`.
 
 ## Development 💻
 
@@ -113,6 +152,15 @@ docker compose exec db createdb -U pithos pithos_test
 TEST_DATABASE_URL=postgres://pithos:pithos@localhost:5432/pithos_test npm test
 ```
 
+`server/lib/customDatabase.mysql.test.ts` checks the own-database connector against real MySQL and MariaDB servers (read-only enforcement, timeouts, ids and dates). Each engine runs only when its URL is set, e.g.:
+
+```bash
+docker run -d --rm --name pithos-mysql -e MYSQL_ROOT_PASSWORD=pithos -e MYSQL_DATABASE=pithos_test -p 3306:3306 mysql:8.4
+TEST_MYSQL_URL=mysql://root:pithos@127.0.0.1:3306/pithos_test npm test
+```
+
+`TEST_MARIADB_URL` works the same way. CI runs both.
+
 ## Project structure 📁
 
 ```
@@ -120,14 +168,14 @@ pithos/
 ├── server/                   # The API server (Node + Hono)
 │   ├── index.ts              # Entry: runs migrations, serves /api and the built frontend
 │   ├── app.ts                # Routes
-│   ├── routes/               # stores, settings, layouts, account, openai, shopify/, woocommerce/
-│   └── lib/                  # auth, db, migrations, crypto, store/settings data access, OpenAI client
+│   ├── routes/               # stores, settings, layouts, account, openai, database, shopify/, woocommerce/
+│   └── lib/                  # auth, db, migrations, crypto, store/settings data access, OpenAI client, own-database connector
 ├── src/
 │   ├── components/           # Dashboard, onboarding, integrations, assistant
 │   ├── contexts/             # Auth, filters, AI assistant
 │   ├── hooks/                # Store data, preferences, dashboard presets
 │   ├── pages/                # Routes: auth, dashboard, demo
-│   ├── services/             # API client, Shopify/WooCommerce clients, cache, store health
+│   ├── services/             # API client, Shopify/WooCommerce/database clients, cache, store health
 │   └── utils/                # Metrics, forecasting, query analyzer, AI request building
 ├── Dockerfile
 ├── docker-compose.yml
@@ -140,7 +188,7 @@ Better Auth owns `user`, `session`, `account` and `verification`. Everything els
 
 | Table | Holds |
 | --- | --- |
-| `stores` | Connected stores: platform, URL, **encrypted** credentials, active flag, last sync health |
+| `stores` | Connected stores and own databases: platform, URL, label, **encrypted** credentials (for databases also the SQL queries), active flag, last sync health |
 | `user_settings` | Preferences, and the user's **encrypted** OpenAI key (plus a short hint like `…a1b2`) |
 | `dashboard_layouts` | Which Overview layout each store view uses |
 | `recommendations` | Last AI recommendations per store view, reused for a week |
