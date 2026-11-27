@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { requireUser, type AuthedEnv } from '../lib/requireUser';
 import {
   deleteStore,
+  getStore,
   listStores,
   saveStore,
   setActiveStore,
@@ -23,6 +24,14 @@ import {
   storeIdFromUrl,
 } from '../lib/wooCommerceAuth';
 import { verifyWooCommerceKeysWork } from '../lib/wooCommerceOAuth';
+import {
+  DatabaseConnectorError,
+  databaseUrl,
+  isDatabaseCredentials,
+  parseDatabaseInput,
+  storeIdForDatabase,
+  testDatabaseConnection,
+} from '../lib/customDatabase';
 
 /**
  * The user's connected stores. Listing never includes credentials; manual
@@ -118,7 +127,47 @@ storesRoutes.post('/', async c => {
     return c.json({ store }, 201);
   }
 
-  return c.json({ error: 'platform must be "shopify" or "woocommerce"' }, 400);
+  if (body.platform === 'database') {
+    const credentials = parseDatabaseInput(body);
+    if (typeof credentials === 'string') return c.json({ error: credentials }, 400);
+
+    // Editing an existing connection (Manage Stores -> Edit): it keeps its id,
+    // and a blank password means "keep the saved one" - but only while it is
+    // still going to the same server as the same user.
+    const editingId = typeof body.storeId === 'string' ? body.storeId : '';
+    const existing = editingId ? await getStore(uid, editingId) : null;
+    if (editingId && (!existing || existing.platform !== 'database')) {
+      return c.json({ error: 'Store not found' }, 404);
+    }
+    if (!credentials.password && existing && isDatabaseCredentials(existing.credentials)) {
+      if (existing.credentials.host === credentials.host && existing.credentials.user === credentials.user) {
+        credentials.password = existing.credentials.password;
+      }
+    }
+
+    try {
+      await testDatabaseConnection(credentials);
+    } catch (error) {
+      if (error instanceof DatabaseConnectorError) {
+        const status = error.reason === 'unreachable' ? 502 : 400;
+        return c.json({ error: error.message, reason: error.reason }, status);
+      }
+      throw error;
+    }
+
+    const rawLabel = typeof body.name === 'string' ? body.name.trim().slice(0, 80) : '';
+    const store = await saveStore(uid, {
+      id: existing?.id ?? storeIdForDatabase(credentials),
+      platform: 'database',
+      url: databaseUrl(credentials),
+      credentials,
+      authMethod: 'password',
+      label: rawLabel || `${credentials.database} on ${credentials.host}`,
+    });
+    return c.json({ store }, existing ? 200 : 201);
+  }
+
+  return c.json({ error: 'platform must be "shopify", "woocommerce" or "database"' }, 400);
 });
 
 storesRoutes.delete('/:id', async c => {

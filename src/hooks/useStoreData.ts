@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { shopifyService } from '../services/shopifyService';
 import { woocommerceService } from '../services/woocommerceService';
+import { databaseService } from '../services/databaseService';
 import { cacheService } from '../services/cacheService';
 import { ShopifyProduct, ShopifyOrder } from '../types/shopify';
 import { useAuth } from '../contexts/AuthContext';
@@ -157,27 +158,30 @@ function splitByPlatform(stores: StoreRef[]) {
   return {
     shopifyIds: stores.filter(s => s.platform === 'shopify').map(s => s.id),
     wooIds: stores.filter(s => s.platform === 'woocommerce').map(s => s.id),
+    databaseIds: stores.filter(s => s.platform === 'database').map(s => s.id),
   };
 }
 
 async function fetchProductsForStores(stores: StoreRef[]): Promise<StoreFetchResult<ShopifyProduct>> {
-  const { shopifyIds, wooIds } = splitByPlatform(stores);
+  const { shopifyIds, wooIds, databaseIds } = splitByPlatform(stores);
 
-  const [shopify, woo] = await Promise.all([
+  const results: StoreFetchResult<ShopifyProduct>[] = await Promise.all([
     shopifyIds.length ? shopifyService.getProductsForStores(shopifyIds) : Promise.resolve(EMPTY_RESULT),
     wooIds.length ? woocommerceService.getProductsForStores(wooIds) : Promise.resolve(EMPTY_RESULT),
+    databaseIds.length ? databaseService.getProductsForStores(databaseIds) : Promise.resolve(EMPTY_RESULT),
   ]);
 
-  return { data: [...shopify.data, ...woo.data], issues: [...shopify.issues, ...woo.issues] };
+  return { data: results.flatMap(r => r.data), issues: results.flatMap(r => r.issues) };
 }
 
 async function fetchOrdersForStores(stores: StoreRef[]): Promise<StoreFetchResult<ShopifyOrder>> {
-  const { shopifyIds, wooIds } = splitByPlatform(stores);
+  const { shopifyIds, wooIds, databaseIds } = splitByPlatform(stores);
 
-  const [shopify, woo] = await Promise.all([
+  const results: StoreFetchResult<ShopifyOrder>[] = await Promise.all([
     shopifyIds.length ? shopifyService.getOrdersForStores(shopifyIds) : Promise.resolve(EMPTY_RESULT),
     wooIds.length ? woocommerceService.getOrdersForStores(wooIds) : Promise.resolve(EMPTY_RESULT),
+    databaseIds.length ? databaseService.getOrdersForStores(databaseIds) : Promise.resolve(EMPTY_RESULT),
   ]);
 
-  return { data: [...shopify.data, ...woo.data], issues: [...shopify.issues, ...woo.issues] };
+  return { data: results.flatMap(r => r.data), issues: results.flatMap(r => r.issues) };
 }

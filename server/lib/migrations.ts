@@ -69,6 +69,20 @@ const APP_MIGRATIONS: { id: string; sql: string }[] = [
       );
     `,
   },
+  {
+    id: '002_custom_databases',
+    sql: `
+      -- "Bring your own database": a store can be the merchant's own Postgres,
+      -- read through their SQL queries (lib/customDatabase.ts). Its connection
+      -- details and queries live in credentials_encrypted like any other store.
+      ALTER TABLE stores DROP CONSTRAINT IF EXISTS stores_platform_check;
+      ALTER TABLE stores ADD CONSTRAINT stores_platform_check
+        CHECK (platform IN ('shopify', 'woocommerce', 'database'));
+
+      -- Display name the user chose; NULL derives one from url (shop domains).
+      ALTER TABLE stores ADD COLUMN label TEXT;
+    `,
+  },
 ];
 
 // Arbitrary constant: keeps two app instances starting at once from

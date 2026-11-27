@@ -28,7 +28,7 @@ export interface DashboardOutletContext {
 interface ShellStore {
   id: string;
   name: string;
-  type: 'shopify' | 'woocommerce' | 'square' | 'all' | 'all_shopify' | 'all_woocommerce';
+  type: 'shopify' | 'woocommerce' | 'database' | 'square' | 'all' | 'all_shopify' | 'all_woocommerce' | 'all_database';
 }
 
 interface DashboardShellProps {

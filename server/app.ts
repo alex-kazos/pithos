@@ -4,6 +4,7 @@ import { isGoogleSignInConfigured, isShopifyOAuthConfigured } from './lib/config
 import { storesRoutes } from './routes/stores';
 import { settingsRoutes } from './routes/settings';
 import { layoutsRoutes } from './routes/layouts';
+import { databaseRoutes } from './routes/database';
 import * as account from './routes/account';
 import * as openai from './routes/openai';
 import * as shopifyProxy from './routes/shopify/proxy';
@@ -36,6 +37,7 @@ export function createApp(): Hono {
   app.route('/api/stores', storesRoutes);
   app.route('/api/settings', settingsRoutes);
   app.route('/api/layouts', layoutsRoutes);
+  app.route('/api/database', databaseRoutes);
 
   app.all('/api/account/*', handle(account));
   app.all('/api/openai/*', handle(openai));

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Store, ShoppingBag, Trash2, CheckCircle2, Loader2, AlertTriangle, RefreshCw, Plug } from 'lucide-react';
+import { Store, ShoppingBag, Database, Trash2, CheckCircle2, Loader2, AlertTriangle, RefreshCw, Plug, Pencil } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLockBodyScroll } from '../../hooks/useLockBodyScroll';
 import { getStoreDisplayName } from '../../utils/storeDisplay';
@@ -14,9 +14,11 @@ import { readConnectionRecord, recordStoreHealth, seedConnectionRecord } from '.
 import { deleteStore, listStores } from '../../services/api';
 import { shopifyService } from '../../services/shopifyService';
 import { woocommerceService } from '../../services/woocommerceService';
+import { databaseService } from '../../services/databaseService';
 import { logger } from '../../utils/logger';
 import { ShopifySetup } from '../integrations/ShopifySetup';
 import { WooCommerceSetup } from '../integrations/WooCommerceSetup';
+import { DatabaseSetup } from '../integrations/DatabaseSetup';
 
 interface StoreHealth {
   status: 'ok' | 'error';
@@ -28,7 +30,7 @@ interface StoreHealth {
 interface StoreRow {
   id: string;
   name: string;
-  type: 'shopify' | 'woocommerce' | 'square';
+  type: 'shopify' | 'woocommerce' | 'database' | 'square';
   isActive: boolean;
   /** null while unknown - nothing has reported on this store yet. */
   health: StoreHealth | null;
@@ -37,6 +39,7 @@ interface StoreRow {
 const PLATFORM_META: Record<StoreRow['type'], { label: string; icon: typeof Store }> = {
   shopify: { label: 'Shopify', icon: Store },
   woocommerce: { label: 'WooCommerce', icon: ShoppingBag },
+  database: { label: 'Databases', icon: Database },
   square: { label: 'Square', icon: Store },
 };
 
@@ -44,6 +47,7 @@ const PLATFORM_META: Record<StoreRow['type'], { label: string; icon: typeof Stor
 function checkableService(type: StoreRow['type']) {
   if (type === 'shopify') return shopifyService;
   if (type === 'woocommerce') return woocommerceService;
+  if (type === 'database') return databaseService;
   return null;
 }
 
@@ -81,6 +85,8 @@ export function ManageStoresModal({ onClose, issues = [] }: ManageStoresModalPro
   const [changed, setChanged] = useState(false);
   const [showShopifySetup, setShowShopifySetup] = useState(false);
   const [showWooCommerceSetup, setShowWooCommerceSetup] = useState(false);
+  /** Open database form: `{}` adds a new connection, a store id edits that one. */
+  const [databaseSetup, setDatabaseSetup] = useState<{ storeId?: string; name?: string } | null>(null);
 
   const liveIssues = useMemo(() => new Map(issues.map(issue => [issue.storeId, issue])), [issues]);
 
@@ -95,7 +101,7 @@ export function ManageStoresModal({ onClose, issues = [] }: ManageStoresModalPro
         seedConnectionRecord(user.uid, store.id, health);
         return {
           id: store.id,
-          name: store.url,
+          name: store.label ?? store.url,
           type: store.platform,
           isActive: store.isActive,
           health,
@@ -200,7 +206,8 @@ export function ManageStoresModal({ onClose, issues = [] }: ManageStoresModalPro
   // key it off the store URL), which restores credentials and clears the
   // stored failure in one step.
   const handleReconnect = (store: StoreRow) => {
-    if (store.type === 'woocommerce') setShowWooCommerceSetup(true);
+    if (store.type === 'database') setDatabaseSetup({ storeId: store.id, name: store.name });
+    else if (store.type === 'woocommerce') setShowWooCommerceSetup(true);
     else setShowShopifySetup(true);
   };
 
@@ -258,20 +265,27 @@ export function ManageStoresModal({ onClose, issues = [] }: ManageStoresModalPro
           </div>
         )}
 
-        <div className="flex gap-3 mb-6">
+        <div className="grid grid-cols-3 gap-2.5 mb-6">
           <button
             onClick={() => setShowShopifySetup(true)}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-white/[0.04] border border-white/[0.09] rounded-lg text-white text-[13px] font-medium hover:border-accent/40 transition-colors"
+            className="flex items-center justify-center gap-2 px-3 py-2.5 bg-white/[0.04] border border-white/[0.09] rounded-lg text-white text-[12.5px] font-medium hover:border-accent/40 transition-colors"
           >
-            <Store className="w-4 h-4 text-accent-soft" />
-            Connect Shopify
+            <Store className="w-4 h-4 text-accent-soft shrink-0" />
+            Shopify
           </button>
           <button
             onClick={() => setShowWooCommerceSetup(true)}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-white/[0.04] border border-white/[0.09] rounded-lg text-white text-[13px] font-medium hover:border-accent/40 transition-colors"
+            className="flex items-center justify-center gap-2 px-3 py-2.5 bg-white/[0.04] border border-white/[0.09] rounded-lg text-white text-[12.5px] font-medium hover:border-accent/40 transition-colors"
           >
-            <ShoppingBag className="w-4 h-4 text-accent-soft" />
-            Connect WooCommerce
+            <ShoppingBag className="w-4 h-4 text-accent-soft shrink-0" />
+            WooCommerce
+          </button>
+          <button
+            onClick={() => setDatabaseSetup({})}
+            className="flex items-center justify-center gap-2 px-3 py-2.5 bg-white/[0.04] border border-white/[0.09] rounded-lg text-white text-[12.5px] font-medium hover:border-accent/40 transition-colors"
+          >
+            <Database className="w-4 h-4 text-accent-soft shrink-0" />
+            Database
           </button>
         </div>
 
@@ -334,13 +348,23 @@ export function ManageStoresModal({ onClose, issues = [] }: ManageStoresModalPro
                               </div>
 
                               <div className="flex items-center gap-1 shrink-0">
+                                {store.type === 'database' && !broken && (
+                                  <button
+                                    onClick={() => handleReconnect(store)}
+                                    className="p-1.5 text-white/40 hover:text-white transition-colors"
+                                    aria-label={`Edit ${getStoreDisplayName(store.name)}`}
+                                    title="Edit connection and queries"
+                                  >
+                                    <Pencil className="w-4 h-4" />
+                                  </button>
+                                )}
                                 {broken && (
                                   <button
                                     onClick={() => handleReconnect(store)}
                                     className="flex items-center gap-1 px-2 py-1 rounded-md border border-white/[0.12] text-white/70 hover:text-white hover:border-accent/40 text-[11.5px] font-medium transition-colors"
                                   >
-                                    <Plug className="w-3 h-3" />
-                                    Reconnect
+                                    {store.type === 'database' ? <Pencil className="w-3 h-3" /> : <Plug className="w-3 h-3" />}
+                                    {store.type === 'database' ? 'Fix' : 'Reconnect'}
                                   </button>
                                 )}
                                 <button
@@ -388,6 +412,13 @@ export function ManageStoresModal({ onClose, issues = [] }: ManageStoresModalPro
 
       {showShopifySetup && <ShopifySetup onClose={() => setShowShopifySetup(false)} />}
       {showWooCommerceSetup && <WooCommerceSetup onClose={() => setShowWooCommerceSetup(false)} />}
+      {databaseSetup && (
+        <DatabaseSetup
+          onClose={() => setDatabaseSetup(null)}
+          editStoreId={databaseSetup.storeId}
+          editStoreName={databaseSetup.name}
+        />
+      )}
     </div>
   );
 }

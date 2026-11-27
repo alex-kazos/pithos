@@ -6,6 +6,8 @@ const saveStore = vi.fn();
 const deleteStore = vi.fn();
 const setActiveStore = vi.fn();
 const setStoreConnection = vi.fn();
+const getStore = vi.fn();
+const testDatabaseConnection = vi.fn();
 
 vi.mock('../lib/auth', () => ({ verifyAuth: (...args: unknown[]) => verifyAuth(...args) }));
 vi.mock('../lib/stores', () => ({
@@ -14,6 +16,11 @@ vi.mock('../lib/stores', () => ({
   deleteStore: (...args: unknown[]) => deleteStore(...args),
   setActiveStore: (...args: unknown[]) => setActiveStore(...args),
   setStoreConnection: (...args: unknown[]) => setStoreConnection(...args),
+  getStore: (...args: unknown[]) => getStore(...args),
+}));
+vi.mock('../lib/customDatabase', async importOriginal => ({
+  ...(await importOriginal<typeof import('../lib/customDatabase')>()),
+  testDatabaseConnection: (...args: unknown[]) => testDatabaseConnection(...args),
 }));
 
 import { storesRoutes } from './stores';
@@ -27,7 +34,8 @@ function post(body: unknown) {
 
 describe('/api/stores', () => {
   beforeEach(() => {
-    for (const fn of [verifyAuth, listStores, saveStore, deleteStore, setActiveStore, setStoreConnection]) fn.mockReset();
+    for (const fn of [verifyAuth, listStores, saveStore, deleteStore, setActiveStore, setStoreConnection, getStore, testDatabaseConnection]) fn.mockReset();
+    testDatabaseConnection.mockResolvedValue({ products: 1, orders: 1 });
     verifyAuth.mockResolvedValue({ uid: 'user-1', email: null });
     saveStore.mockImplementation(async (_uid, input) => ({ id: input.id, platform: input.platform, url: input.url, isActive: true }));
     global.fetch = vi.fn();
@@ -137,6 +145,80 @@ describe('/api/stores', () => {
       url: 'https://my-shop.example.com',
       credentials: { consumerKey, consumerSecret },
       authMethod: 'manual',
+    });
+  });
+
+  describe('own database', () => {
+    const QUERIES = { productsQuery: 'SELECT id, name AS title, stock AS inventory_quantity FROM products', ordersQuery: 'SELECT 1' };
+    const SAVED = {
+      id: 'db-db-example-com-5432-shop',
+      platform: 'database',
+      credentials: {
+        engine: 'postgres', host: 'db.example.com', port: 5432, database: 'shop', user: 'ro', password: 'saved-secret',
+        ssl: 'require', ...QUERIES,
+      },
+    };
+
+    it('tests the queries, then saves the connection encrypted with a display URL and label', async () => {
+      const response = await post({ platform: 'database', connectionString: 'postgres://ro:pw@db.example.com/shop', ...QUERIES });
+
+      expect(response.status).toBe(201);
+      expect(testDatabaseConnection).toHaveBeenCalledWith(expect.objectContaining({ host: 'db.example.com', password: 'pw' }));
+      expect(saveStore).toHaveBeenCalledWith('user-1', {
+        id: 'db-db-example-com-5432-shop',
+        platform: 'database',
+        url: 'postgres://db.example.com:5432/shop',
+        credentials: expect.objectContaining({ engine: 'postgres', user: 'ro', password: 'pw', productsQuery: QUERIES.productsQuery }),
+        authMethod: 'password',
+        label: 'shop on db.example.com',
+      });
+    });
+
+    it('does not save a connection whose queries fail, and says why', async () => {
+      const { DatabaseConnectorError } = await import('../lib/customDatabase');
+      testDatabaseConnection.mockRejectedValueOnce(new DatabaseConnectorError('query', 'The products query is missing column "title".'));
+
+      const response = await post({ platform: 'database', connectionString: 'postgres://ro:pw@db.example.com/shop', ...QUERIES });
+
+      expect(response.status).toBe(400);
+      expect(await response.json()).toMatchObject({ error: 'The products query is missing column "title".', reason: 'query' });
+      expect(saveStore).not.toHaveBeenCalled();
+    });
+
+    it('rejects invalid input before connecting', async () => {
+      const response = await post({ platform: 'database', host: 'not a host', database: 'shop', user: 'ro', ...QUERIES });
+      expect(response.status).toBe(400);
+      expect(testDatabaseConnection).not.toHaveBeenCalled();
+    });
+
+    it('editing keeps the store id and the saved password when the password is left blank', async () => {
+      getStore.mockResolvedValueOnce(SAVED);
+
+      const response = await post({
+        platform: 'database', storeId: SAVED.id, name: 'Warehouse', host: 'db.example.com', database: 'shop', user: 'ro', password: '', ...QUERIES,
+      });
+
+      expect(response.status).toBe(200);
+      expect(getStore).toHaveBeenCalledWith('user-1', SAVED.id);
+      expect(saveStore).toHaveBeenCalledWith('user-1', expect.objectContaining({
+        id: SAVED.id,
+        label: 'Warehouse',
+        credentials: expect.objectContaining({ password: 'saved-secret' }),
+      }));
+    });
+
+    it('does not reuse a saved password for a different server', async () => {
+      getStore.mockResolvedValueOnce(SAVED);
+
+      await post({ platform: 'database', storeId: SAVED.id, host: 'evil.example.net', database: 'shop', user: 'ro', password: '', ...QUERIES });
+
+      expect(testDatabaseConnection).toHaveBeenCalledWith(expect.objectContaining({ host: 'evil.example.net', password: '' }));
+    });
+
+    it("404s when editing a store that isn't the user's database", async () => {
+      getStore.mockResolvedValueOnce(null);
+      const response = await post({ platform: 'database', storeId: 'nope', host: 'db.example.com', database: 'shop', user: 'ro', ...QUERIES });
+      expect(response.status).toBe(404);
     });
   });
 

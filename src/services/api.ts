@@ -51,14 +51,16 @@ export function getConfig(): Promise<AppConfig> {
 
 // --- Stores ----------------------------------------------------------------
 
-export type StorePlatform = 'shopify' | 'woocommerce';
+export type StorePlatform = 'shopify' | 'woocommerce' | 'database';
 
 /** A connected store as the browser sees it - credentials never leave the server. */
 export interface StoreSummary {
   id: string;
   platform: StorePlatform;
-  /** Shop domain (Shopify) or store URL (WooCommerce). */
+  /** Shop domain (Shopify), store URL (WooCommerce) or postgres://host:port/db (database). */
   url: string;
+  /** Name the user gave it (custom databases); null for platform stores. */
+  label: string | null;
   authMethod: string;
   isActive: boolean;
   connection: StoreConnectionRecord | null;
@@ -92,6 +94,55 @@ export async function connectWooCommerceStore(
       ...json({ platform: 'woocommerce', storeUrl, consumerKey, consumerSecret }),
     })
   ).store;
+}
+
+/** `mysql` covers MariaDB too. */
+export type DatabaseEngine = 'postgres' | 'mysql';
+
+/**
+ * Your own PostgreSQL or MySQL/MariaDB database, read with two SQL queries (see
+ * server/lib/customDatabase.ts for the column names they must return).
+ * Either a connection string or the individual fields. Passing `storeId`
+ * edits that connection; a blank password then keeps the saved one.
+ */
+export interface DatabaseConnectionInput {
+  storeId?: string;
+  name?: string;
+  /** Ignored with a connection string, whose scheme (postgres://, mysql://) decides. */
+  engine?: DatabaseEngine;
+  connectionString?: string;
+  host?: string;
+  port?: number;
+  database?: string;
+  user?: string;
+  password?: string;
+  ssl?: DatabaseSslMode;
+  productsQuery: string;
+  ordersQuery: string;
+}
+
+export type DatabaseSslMode = 'disable' | 'require' | 'verify-full';
+
+export async function connectDatabase(input: DatabaseConnectionInput): Promise<StoreSummary> {
+  return (
+    await request<{ store: StoreSummary }>('/api/stores', { method: 'POST', ...json({ platform: 'database', ...input }) })
+  ).store;
+}
+
+/** A saved database connection without its password, for the edit form. */
+export interface DatabaseConfig {
+  engine: DatabaseEngine;
+  host: string;
+  port: number;
+  database: string;
+  user: string;
+  ssl: DatabaseSslMode;
+  productsQuery: string;
+  ordersQuery: string;
+}
+
+export async function getDatabaseConfig(storeId: string): Promise<DatabaseConfig> {
+  return (await request<{ config: DatabaseConfig }>('/api/database/config', { headers: { 'x-store-id': storeId } })).config;
 }
 
 export async function deleteStore(storeId: string): Promise<void> {

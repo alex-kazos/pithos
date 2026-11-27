@@ -133,4 +133,75 @@ describe.skipIf(!TEST_DATABASE_URL)('server against a real Postgres', () => {
              (SELECT count(*) FROM "session") AS sessions`);
     expect(leftovers.rows[0]).toEqual({ users: '0', stores: '0', settings: '0', sessions: '1' }); // Bob's session remains
   });
+
+  it("reads products and orders from the user's own Postgres, read-only, without ever returning its password", async () => {
+    // The merchant's "own database" is this same test server - so it's a
+    // private host, which a deployment has to opt in to.
+    process.env.ALLOW_PRIVATE_DATABASE_HOSTS = 'true';
+    await query(`
+      CREATE TABLE byo_products (code TEXT PRIMARY KEY, name TEXT, qty INT, price NUMERIC(10,2));
+      CREATE TABLE byo_order_lines (order_ref TEXT, ordered_at TIMESTAMPTZ, product_code TEXT, qty INT, unit_price NUMERIC(10,2));
+      INSERT INTO byo_products VALUES ('MUG', 'Mug', 12, 9.50), ('TEE', 'T-shirt', 0, 20.00);
+      INSERT INTO byo_order_lines VALUES
+        ('A-1', now() - interval '2 days', 'MUG', 2, 9.50),
+        ('A-1', now() - interval '2 days', 'TEE', 1, 20.00),
+        ('A-2', now() - interval '1 day', 'MUG', 1, 9.50);
+    `);
+
+    const source = new URL(TEST_DATABASE_URL!);
+    source.searchParams.set('sslmode', 'disable');
+    const carol = await signUp('carol@example.com');
+
+    const badQuery = await call(carol, '/api/stores', {
+      method: 'POST',
+      body: JSON.stringify({
+        platform: 'database',
+        connectionString: source.toString(),
+        productsQuery: 'SELECT code AS id, name FROM byo_products',
+        ordersQuery: 'SELECT 1',
+      }),
+    });
+    expect(badQuery.status).toBe(400);
+    expect((await badQuery.json()).error).toMatch(/missing columns "title", "inventory_quantity"/);
+
+    const connect = await call(carol, '/api/stores', {
+      method: 'POST',
+      body: JSON.stringify({
+        platform: 'database',
+        name: 'Warehouse DB',
+        connectionString: source.toString(),
+        productsQuery: 'SELECT code AS id, name AS title, code AS sku, qty AS inventory_quantity, price FROM byo_products;',
+        ordersQuery:
+          'SELECT order_ref AS order_id, ordered_at AS created_at, product_code AS product_id, qty AS quantity, unit_price AS price FROM byo_order_lines',
+      }),
+    });
+    expect(connect.status).toBe(201);
+    const { store } = await connect.json();
+    expect(store).toMatchObject({ platform: 'database', label: 'Warehouse DB', isActive: true });
+
+    const password = decodeURIComponent(source.password);
+    const listed = await (await call(carol, '/api/stores')).text();
+    expect(listed).not.toContain(password);
+    const config = await (await call(carol, '/api/database/config', { headers: { 'x-store-id': store.id } })).json();
+    expect(config.config).toMatchObject({ user: decodeURIComponent(source.username) });
+    expect(JSON.stringify(config)).not.toContain(password);
+
+    const products = await (await call(carol, '/api/database/products', { headers: { 'x-store-id': store.id } })).json();
+    expect(products).toHaveLength(2);
+    expect(products.find((p: { title: string }) => p.title === 'Mug').variants[0]).toMatchObject({ sku: 'MUG', inventory_quantity: 12, price: '9.5' });
+
+    const orders = await (await call(carol, '/api/database/orders', { headers: { 'x-store-id': store.id } })).json();
+    expect(orders).toHaveLength(2);
+    const a1 = orders.find((o: { line_items: unknown[] }) => o.line_items.length === 2);
+    expect(a1.total_price).toBe('39');
+    // String product codes become the same numeric id on both sides, so sales line up with products.
+    const mugId = products.find((p: { title: string }) => p.title === 'Mug').id;
+    expect(a1.line_items.map((li: { product_id: number }) => li.product_id)).toContain(mugId);
+
+    // Another user can't read through Carol's connection.
+    const dave = await signUp('dave@example.com');
+    expect((await call(dave, '/api/database/products', { headers: { 'x-store-id': store.id } })).status).toBe(404);
+
+    delete process.env.ALLOW_PRIVATE_DATABASE_HOSTS;
+  });
 });

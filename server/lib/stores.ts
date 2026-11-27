@@ -1,7 +1,8 @@
 import { query, withTransaction } from './db';
 import { decryptSecret, encryptSecret } from './crypto';
+import type { DatabaseCredentials } from './customDatabase';
 
-export type StorePlatform = 'shopify' | 'woocommerce';
+export type StorePlatform = 'shopify' | 'woocommerce' | 'database';
 
 /** A Shopify Dev Dashboard app: its token is fetched from these and lasts 24 hours. */
 export interface ShopifyClientCredentials {
@@ -15,7 +16,8 @@ export interface ShopifyClientCredentials {
 export type StoreCredentials =
   | { apiToken: string }
   | ShopifyClientCredentials
-  | { consumerKey: string; consumerSecret: string };
+  | { consumerKey: string; consumerSecret: string }
+  | DatabaseCredentials;
 
 /** Health verdict the dashboard records after each sync (see src/services/storeHealthService.ts). */
 export interface StoreConnectionRecord {
@@ -30,6 +32,8 @@ export interface StoreSummary {
   id: string;
   platform: StorePlatform;
   url: string;
+  /** Name the user gave the store (custom databases); null means "derive it from url". */
+  label: string | null;
   authMethod: string;
   isActive: boolean;
   connection: StoreConnectionRecord | null;
@@ -44,6 +48,7 @@ interface StoreRow {
   id: string;
   platform: StorePlatform;
   url: string;
+  label: string | null;
   credentials_encrypted: string;
   auth_method: string;
   is_active: boolean;
@@ -56,6 +61,7 @@ function toSummary(row: StoreRow): StoreSummary {
     id: row.id,
     platform: row.platform,
     url: row.url,
+    label: row.label ?? null,
     authMethod: row.auth_method,
     isActive: row.is_active,
     connection: row.connection,
@@ -88,6 +94,7 @@ export interface SaveStoreInput {
   credentials: StoreCredentials;
   authMethod: string;
   scope?: string | null;
+  label?: string | null;
 }
 
 /**
@@ -99,11 +106,12 @@ export async function saveStore(userId: string, input: SaveStoreInput): Promise<
     // Exactly one store per user is active (enforced by a partial unique index).
     await client.query('UPDATE stores SET is_active = false WHERE user_id = $1 AND id <> $2', [userId, input.id]);
     const { rows } = await client.query<StoreRow>(
-      `INSERT INTO stores (user_id, id, platform, url, credentials_encrypted, auth_method, scope, is_active)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, true)
+      `INSERT INTO stores (user_id, id, platform, url, credentials_encrypted, auth_method, scope, label, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true)
        ON CONFLICT (user_id, id) DO UPDATE SET
          platform = EXCLUDED.platform,
          url = EXCLUDED.url,
+         label = EXCLUDED.label,
          credentials_encrypted = EXCLUDED.credentials_encrypted,
          auth_method = EXCLUDED.auth_method,
          scope = EXCLUDED.scope,
@@ -119,6 +127,7 @@ export async function saveStore(userId: string, input: SaveStoreInput): Promise<
         encryptSecret(JSON.stringify(input.credentials)),
         input.authMethod,
         input.scope ?? null,
+        input.label ?? null,
       ]
     );
     return toSummary(rows[0]);
